@@ -1,4 +1,4 @@
-import { COLS, FLOOR, GAP, HEIGHT, R, RING_R, aimEnd, clampAim, launch, step } from './engine.js';
+import { COLS, FLOOR, GAP, HEIGHT, R, RING_R, aimEnd, clampAim, inDanger, launch, step } from './engine.js';
 import { clearGame, loadBest, newGame, saveBest, saveGame } from './session.js';
 import { icon } from '../icons.js';
 import { chooseTheme } from '../settings.js';
@@ -214,6 +214,7 @@ function updateHud(c) {
   c.els.score.textContent = String(s.level);
   c.els.best.textContent = String(c.best);
   c.els.balls.textContent = `Шары: ${s.ballCount}`;
+  c.els.card.classList.toggle('is-danger', inDanger(s));
 }
 
 function handleEvents(c, events, now) {
@@ -373,6 +374,7 @@ export function mountBallz(root, state, { onExit }) {
     els: {
       screen,
       play: screen.querySelector('.bz-play'),
+      card: screen.querySelector('.bz-card'),
       status: screen.querySelector('.status'),
       bottom: screen.querySelector('.bz-bottom'),
       canvas: screen.querySelector('.bz-canvas'),

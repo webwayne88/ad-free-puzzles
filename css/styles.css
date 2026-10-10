@@ -826,6 +826,29 @@ button:disabled {
   width: calc(var(--field-w, 100%) + 8px);
 }
 
+.bz-card {
+  transition: box-shadow 0.4s ease;
+}
+
+/* Блок у самого низа: мягко пульсирующее красное свечение рамки */
+.bz-card.is-danger {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--error) 70%, transparent),
+    0 0 24px 4px color-mix(in srgb, var(--error) 35%, transparent);
+  animation: danger-glow 1.8s ease-in-out infinite;
+}
+
+@keyframes danger-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--error) 55%, transparent),
+      0 0 18px 2px color-mix(in srgb, var(--error) 25%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--error) 85%, transparent),
+      0 0 32px 6px color-mix(in srgb, var(--error) 45%, transparent);
+  }
+}
+
 .bz-canvas {
   display: block;
   border-radius: 10px;

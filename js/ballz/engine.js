@@ -221,6 +221,11 @@ function endTurn(state, rng, events) {
   events.push({ type: 'turn' });
 }
 
+// Блок на последнем ряду: если его не разбить, следующий ход проигрышный.
+export function inDanger(state) {
+  return state.blocks.some((block) => block.r >= ROWS - 1);
+}
+
 export function launch(state, dir) {
   if (state.phase !== 'aim' || !dir) return false;
   state.phase = 'fly';

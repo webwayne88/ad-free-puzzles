@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { COLS, FLOOR, R, ROWS, clampAim, aimEnd, createGame, launch, restore, snapshot, step } from '../js/ballz/engine.js';
+import { COLS, FLOOR, R, ROWS, clampAim, aimEnd, createGame, inDanger, launch, restore, snapshot, step } from '../js/ballz/engine.js';
 
 function seeded(seed) {
   let a = seed >>> 0;
@@ -131,4 +131,9 @@ test('snapshot/restore сохраняет позицию между сессия
   assert.equal(copy.phase, 'aim');
   assert.equal(copy.balls.length, 0);
   assert.equal(FLOOR, 10);
+});
+
+test('опасность — блок на последнем ряду перед зоной запуска', () => {
+  assert.equal(inDanger(emptyGame({ blocks: [{ c: 0, r: ROWS - 2, hp: 1 }] })), false);
+  assert.equal(inDanger(emptyGame({ blocks: [{ c: 0, r: ROWS - 1, hp: 1 }] })), true);
 });
