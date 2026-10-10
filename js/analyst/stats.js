@@ -47,34 +47,35 @@ export function linearFit(points) {
   return { slope, intercept: my - slope * mx };
 }
 
-// Аппроксимация Абрамовица — Стиган, погрешность меньше 1.5e-7.
-function erf(x) {
-  const t = 1 / (1 + 0.3275911 * Math.abs(x));
-  const poly = ((((1.061405429 * t - 1.453152027) * t + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t;
-  const y = 1 - poly * Math.exp(-x * x);
-  return x >= 0 ? y : -y;
+export function mean(values) {
+  return values.reduce((sum, v) => sum + v, 0) / values.length;
 }
 
-export function normCdf(z) {
-  return 0.5 * (1 + erf(z / Math.SQRT2));
+// Квантиль отсортированного массива с линейной интерполяцией.
+export function quantile(sorted, q) {
+  const position = (sorted.length - 1) * q;
+  const low = Math.floor(position);
+  const high = Math.ceil(position);
+  return sorted[low] + (sorted[high] - sorted[low]) * (position - low);
 }
 
-const Z_95 = 1.959964;
-const Z_POWER_80 = 0.841621;
+// 10 очков при точном ответе, линейно до 0 при ошибке zeroAt.
+export function scoreByError(error, zeroAt) {
+  return Math.round(Math.max(0, 1 - error / zeroAt) * 100) / 10;
+}
 
-// Z-тест для двух долей: двусторонний p-value, 95% ДИ разницы и размер выборки для 80% мощности.
-export function twoProportionTest(nA, cA, nB, cB) {
-  const pA = cA / nA;
-  const pB = cB / nB;
-  const pooled = (cA + cB) / (nA + nB);
-  const sePooled = Math.sqrt(pooled * (1 - pooled) * (1 / nA + 1 / nB));
-  const z = sePooled === 0 ? 0 : (pB - pA) / sePooled;
-  const pValue = 2 * (1 - normCdf(Math.abs(z)));
-  const se = Math.sqrt((pA * (1 - pA)) / nA + (pB * (1 - pB)) / nB);
-  const diff = pB - pA;
-  const variance = pA * (1 - pA) + pB * (1 - pB);
-  const neededN = diff === 0 ? Infinity : Math.ceil(((Z_95 + Z_POWER_80) ** 2 * variance) / diff ** 2);
-  let winner = 'none';
-  if (pValue < 0.05) winner = diff > 0 ? 'B' : 'A';
-  return { pA, pB, diff, z, pValue, ciLow: diff - Z_95 * se, ciHigh: diff + Z_95 * se, neededN, winner };
+// Число для подписей: тысячи без дробей, мелкие — с 1–2 знаками.
+export function formatValue(value) {
+  const abs = Math.abs(value);
+  let digits = 2;
+  if (abs >= 100) digits = 0;
+  else if (abs >= 10) digits = 1;
+  return value.toLocaleString('ru-RU', { maximumFractionDigits: digits }).replace('-', '−');
+}
+
+// «Круглый» порог: две значащие цифры.
+export function roundNice(value) {
+  if (value === 0) return 0;
+  const step = 10 ** (Math.floor(Math.log10(Math.abs(value))) - 1);
+  return Math.round(value / step) * step;
 }

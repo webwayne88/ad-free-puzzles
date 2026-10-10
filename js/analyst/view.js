@@ -1,23 +1,29 @@
-import { ROUNDS, createGame, next, submit, total } from './game.js';
+import { HINT_CAP, ROUNDS, createGame, next, showHint, submit, total } from './game.js';
 import { formatAnswer } from './metrics.js';
+import { dotplotSvg, histogramSvg, lineSvg, scatterScale, scatterSvg } from './plots.js';
 import { formatNumber, recordGame } from './session.js';
-import { createSlider, setSliderValue } from './slider.js';
+import { decapitalize } from './dataset.js';
+import { createSlider } from './slider.js';
+import { formatValue } from './stats.js';
+import { trendLesson } from './trend.js';
 import { icon } from '../icons.js';
 import { chooseTheme } from '../settings.js';
 import { el, isOverlayOpen, openOverlay, resultRow } from '../ui.js';
 
 export const MODES = [
-  { value: 'corr', label: 'Корреляция на глаз', short: 'Корреляция', hint: 'Реальные данные по странам: угадай r' },
-  { value: 'metrics', label: 'Метрики в уме', short: 'Метрики', hint: 'CTR, конверсия, ROMI, воронка, проценты' },
-  { value: 'ab', label: 'Значим ли A/B-тест', short: 'A/B-тест', hint: 'Победитель или шум — реши по цифрам' },
+  { value: 'corr', label: 'Корреляция на глаз', short: 'Корреляция', hint: 'Угадай r по диаграмме рассеяния' },
+  { value: 'dist', label: 'Среднее и медиана', short: 'Распределение', hint: 'Где центр распределения стран' },
+  { value: 'trend', label: 'Продолжи тренд', short: 'Тренд', hint: 'Оцени значение через пять лет' },
+  { value: 'outlier', label: 'Найди выброс', short: 'Выброс', hint: 'Страна дальше всех от тренда' },
+  { value: 'share', label: 'Доля выше порога', short: 'Доля', hint: 'Какая часть стран выше линии' },
+  { value: 'metrics', label: 'Метрики в уме', short: 'Метрики', hint: 'CTR, конверсия, ROMI, воронка' },
 ];
 const MAX_INPUT = 10;
-const VERDICTS = { A: 'Победил A', none: 'Разницы нет', B: 'Победил B' };
-const VERDICTS_INLINE = { A: 'победил A', none: 'разницы нет', B: 'победил B' };
-const PLOT = { width: 100, height: 75, left: 9, right: 3, top: 3, bottom: 9 };
+const TAP_RADIUS = 6;
 
 let ctx = null;
-let dataPromise = null;
+let countriesPromise = null;
+let trendsPromise = null;
 
 const SCREEN_HTML = `
   <header class="topbar">
@@ -31,6 +37,7 @@ const SCREEN_HTML = `
         <span class="hu-dots an-dots" aria-hidden="true"></span>
         <span class="hu-total an-total"></span>
       </div>
+      <p class="an-ask"></p>
       <div class="an-stage" aria-live="polite"></div>
       <p class="hu-caption an-caption"></p>
     </section>
@@ -48,13 +55,14 @@ const SCREEN_HTML = `
     </section>
   </main>`;
 
-function loadCorrelationData() {
-  if (!dataPromise) dataPromise = fetch('data/correlations.json').then((response) => response.json());
-  return dataPromise;
-}
-
-function escapeText(text) {
-  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+function loadData(mode) {
+  if (mode === 'metrics') return Promise.resolve({});
+  if (mode === 'trend') {
+    trendsPromise ??= fetch('data/trends.json').then((response) => response.json());
+    return trendsPromise.then((trends) => ({ trends }));
+  }
+  countriesPromise ??= fetch('data/correlations.json').then((response) => response.json());
+  return countriesPromise.then((countries) => ({ countries }));
 }
 
 function currentRound(c) {
@@ -69,115 +77,162 @@ function formatR(value) {
   return formatNumber(value, 2);
 }
 
-function formatPercent(fraction, digits = 1) {
-  return `${formatNumber(fraction * 100, digits)}%`;
+function formatShare(value) {
+  return `${Math.round(value * 100)}%`;
 }
 
-// ---------- Сцена: диаграмма, задача, таблица ----------
+// ---------- Вопрос, сцена, ввод ----------
 
-// «Круглый» шаг шкалы: 1, 2 или 5 × 10^k.
-function niceStep(range, count) {
-  const raw = range / count;
-  const power = 10 ** Math.floor(Math.log10(raw));
-  const fraction = raw / power;
-  if (fraction < 1.5) return power;
-  if (fraction < 3) return 2 * power;
-  if (fraction < 7) return 5 * power;
-  return 10 * power;
+function askFor(c) {
+  const round = currentRound(c);
+  if (c.game.mode === 'dist') return round.ask === 'median' ? 'Где медиана?' : 'Где среднее?';
+  if (c.game.mode === 'trend') return `${round.country}, ${decapitalize(round.title)}. Что будет в 2019 году?`;
+  if (c.game.mode === 'outlier') return 'Какая страна сильнее всех выбивается из тренда?';
+  if (c.game.mode === 'share') return `${round.title}: какая доля стран выше ${formatValue(round.threshold)}?`;
+  if (c.game.mode === 'corr') return 'Насколько сильна связь?';
+  return '';
 }
 
-function linearTicks(min, max) {
-  const step = niceStep(max - min, 4);
-  const ticks = [];
-  for (let t = Math.ceil(min / step) * step; t <= max + 1e-9; t += step) ticks.push(Math.round(t / step) * step);
-  return ticks;
-}
-
-// На лог-оси — степени десятки, а если их мало, то ещё 2 и 5 × 10^k.
-function logTicks(min, max) {
-  const ticks = [];
-  for (let k = Math.floor(min); k <= Math.ceil(max); k++) {
-    for (const m of [1, 2, 5]) {
-      const t = k + Math.log10(m);
-      if (t >= min && t <= max) ticks.push({ t, major: m === 1 });
-    }
+function metricsStage(c, stage) {
+  const round = currentRound(c);
+  const answer = el('div', 'an-answer');
+  const sign = el('button', 'an-sign', '±');
+  sign.type = 'button';
+  sign.dataset.act = 'sign';
+  sign.setAttribute('aria-label', 'Сменить знак');
+  sign.disabled = c.game.phase !== 'pick';
+  const shown = c.typed ? `${c.negative ? '−' : ''}${c.typed}` : 'Ответ';
+  answer.append(sign, el('span', c.typed ? 'an-value' : 'an-value is-placeholder', shown), el('span', 'an-unit', round.unit));
+  stage.append(el('p', 'an-question', round.question), answer);
+  if (c.game.hinted || c.game.phase === 'reveal') {
+    stage.append(el('p', 'an-formula', round.formula));
+  } else {
+    const hint = el('button', 'an-hint', `Формула (максимум ${HINT_CAP} очков)`);
+    hint.type = 'button';
+    hint.dataset.act = 'hint';
+    stage.append(hint);
   }
-  const majors = ticks.filter((tick) => tick.major);
-  return (majors.length >= 3 ? majors : ticks).map((tick) => tick.t);
 }
 
-function compactNumber(value) {
-  if (Math.abs(value) >= 1e6) return `${formatNumber(value / 1e6, value % 1e6 ? 1 : 0)} млн`;
-  if (Math.abs(value) >= 1e3) return `${formatNumber(value / 1e3, value % 1e3 ? 1 : 0)} тыс`;
-  return value.toLocaleString('ru-RU', { maximumFractionDigits: 2 }).replace('-', '−');
+function renderStage(c) {
+  const { game } = c;
+  const stage = c.els.stage;
+  const round = currentRound(c);
+  const reveal = game.phase === 'reveal';
+  const guess = reveal ? currentResult(c).answer : c.slider?.value;
+  stage.className = `an-stage an-stage-${game.mode}`;
+  stage.replaceChildren();
+  if (game.mode === 'corr') stage.innerHTML = scatterSvg(round, { reveal });
+  else if (game.mode === 'outlier') stage.innerHTML = scatterSvg(round, { reveal, selected: reveal ? currentResult(c).answer : c.selected });
+  else if (game.mode === 'dist') stage.innerHTML = histogramSvg(round, { guess, reveal });
+  else if (game.mode === 'share') stage.innerHTML = dotplotSvg(round, { reveal });
+  else if (game.mode === 'trend') stage.innerHTML = lineSvg(round, { guess, reveal });
+  else metricsStage(c, stage);
 }
 
-function axisTicks(min, max, log) {
-  const ticks = log ? logTicks(min, max) : linearTicks(min, max);
-  return ticks.map((t) => ({ t, label: compactNumber(log ? 10 ** t : t) }));
-}
-
-function scatterSvg(round, reveal) {
-  const { width, height, right, top } = PLOT;
-  const left = round.ticks ? 15 : 7;
-  const bottom = round.ticks ? 13 : 9;
-  const xs = round.points.map((p) => p.x);
-  const ys = round.points.map((p) => p.y);
-  const xPad = (Math.max(...xs) - Math.min(...xs)) * 0.04;
-  const yPad = (Math.max(...ys) - Math.min(...ys)) * 0.04;
-  const x0 = Math.min(...xs) - xPad;
-  const x1 = Math.max(...xs) + xPad;
-  const y0 = Math.min(...ys) - yPad;
-  const y1 = Math.max(...ys) + yPad;
-  const px = (x) => left + ((x - x0) / (x1 - x0)) * (width - left - right);
-  const py = (y) => height - bottom - ((y - y0) / (y1 - y0)) * (height - top - bottom);
-  let grid = '';
-  if (round.ticks) {
-    for (const tick of axisTicks(x0, x1, round.xLog)) {
-      const x = px(tick.t).toFixed(2);
-      grid += `<line class="an-grid" x1="${x}" y1="${top}" x2="${x}" y2="${height - bottom}"/>`;
-      grid += `<text class="an-tick" x="${x}" y="${height - bottom + 4.2}" text-anchor="middle">${tick.label}</text>`;
-    }
-    for (const tick of axisTicks(y0, y1, round.yLog)) {
-      const y = py(tick.t).toFixed(2);
-      grid += `<line class="an-grid" x1="${left}" y1="${y}" x2="${width - right}" y2="${y}"/>`;
-      grid += `<text class="an-tick" x="${left - 1.5}" y="${y}" dy="0.9" text-anchor="end">${tick.label}</text>`;
-    }
+function buildNumpad(box) {
+  const pad = el('div', 'an-numpad');
+  for (const key of ['1', '2', '3', '4', '5', '6', '7', '8', '9', ',', '0', 'back']) {
+    const button = el('button', 'an-key');
+    button.type = 'button';
+    button.dataset.key = key;
+    if (key === 'back') {
+      button.innerHTML = icon('backspace');
+      button.setAttribute('aria-label', 'Стереть');
+    } else button.textContent = key;
+    pad.append(button);
   }
-  const dots = round.points.map((p) => `<circle cx="${px(p.x).toFixed(2)}" cy="${py(p.y).toFixed(2)}" r="0.85"/>`).join('');
-  const fit = reveal
-    ? `<line class="an-fit" clip-path="url(#an-clip)" x1="${px(x0)}" y1="${py(round.fit.intercept + round.fit.slope * x0)}" x2="${px(x1)}" y2="${py(round.fit.intercept + round.fit.slope * x1)}"/>`
-    : '';
-  return `<svg class="an-plot" viewBox="0 0 ${width} ${height}" role="img" aria-label="Диаграмма рассеяния: ${escapeText(round.yTitle)} и ${escapeText(round.xTitle)}">
-    <defs><clipPath id="an-clip"><rect x="${left}" y="${top}" width="${width - left - right}" height="${height - top - bottom}"/></clipPath></defs>
-    ${grid}
-    <path class="an-axis" d="M${left} ${top} V${height - bottom} H${width - right}"/>
-    <g class="an-points">${dots}</g>
-    ${fit}
-    <text class="an-axis-title" x="${(left + width - right) / 2}" y="${height - 1.2}" text-anchor="middle">${escapeText(round.xTitle)}</text>
-    <text class="an-axis-title" transform="translate(2.6 ${(top + height - bottom) / 2}) rotate(-90)" text-anchor="middle">${escapeText(round.yTitle)}</text>
-  </svg>`;
+  box.append(pad);
 }
 
-// Разница B − A с 95% ДИ: если отрезок пересекает ноль, разница незначима.
-function ciSvg(test) {
-  const values = [test.ciLow, test.ciHigh, 0].map((v) => v * 100);
-  const span = Math.max(...values) - Math.min(...values) || 1;
-  const lo = Math.min(...values) - span * 0.15;
-  const hi = Math.max(...values) + span * 0.15;
-  const px = (v) => 6 + ((v * 100 - lo) / (hi - lo)) * 88;
-  const significant = test.winner !== 'none' ? 'is-significant' : '';
-  // Ноль подписан сверху, границы интервала снизу — так подписи не налезают друг на друга.
-  return `<svg class="an-ci ${significant}" viewBox="0 0 100 24" role="img" aria-label="Разница B − A и 95% доверительный интервал">
-    <text class="an-ci-label" x="${px(0)}" y="4" text-anchor="middle">0</text>
-    <line class="an-ci-zero" x1="${px(0)}" y1="6" x2="${px(0)}" y2="17"/>
-    <line class="an-ci-range" x1="${px(test.ciLow)}" y1="11.5" x2="${px(test.ciHigh)}" y2="11.5"/>
-    <line class="an-ci-range" x1="${px(test.ciLow)}" y1="9" x2="${px(test.ciLow)}" y2="14"/>
-    <line class="an-ci-range" x1="${px(test.ciHigh)}" y1="9" x2="${px(test.ciHigh)}" y2="14"/>
-    <circle class="an-ci-dot" cx="${px(test.diff)}" cy="11.5" r="1.8"/>
-    <text class="an-ci-label" x="${px(test.ciLow)}" y="22" text-anchor="middle">${formatNumber(test.ciLow * 100, 2)}</text>
-    <text class="an-ci-label" x="${px(test.ciHigh)}" y="22" text-anchor="middle">${formatNumber(test.ciHigh * 100, 2)}</text>
-  </svg>`;
+// Ползунок своего диапазона для каждого раунда: у каждого показателя своя шкала.
+function sliderConfig(c) {
+  const round = currentRound(c);
+  const mode = c.game.mode;
+  if (mode === 'corr') return { label: 'Коэффициент корреляции r', min: -1, max: 1, step: 0.01, value: 0, format: formatR };
+  if (mode === 'share') return { label: 'Доля стран выше порога', min: 0, max: 1, step: 0.01, value: 0.5, format: formatShare };
+  const label = mode === 'dist' ? (round.ask === 'median' ? 'Медиана' : 'Среднее') : 'Значение в 2019 году';
+  const step = (round.hi - round.lo) / 400;
+  return { label, min: round.lo, max: round.hi, step, value: (round.lo + round.hi) / 2, format: formatValue };
+}
+
+function buildInput(c) {
+  const box = c.els.input;
+  box.replaceChildren();
+  c.slider = null;
+  if (c.game.mode === 'metrics') return buildNumpad(box);
+  if (c.game.mode === 'outlier') {
+    box.append(el('p', 'an-instruction', 'Нажми на точку на графике'));
+    return;
+  }
+  c.slider = createSlider(box, { ...sliderConfig(c), onChange: () => renderStage(c) });
+  if (c.game.mode === 'corr') c.slider.track.classList.add('is-signed');
+}
+
+function typedValue(c) {
+  if (!/\d/.test(c.typed)) return null;
+  return Number(`${c.negative ? '-' : ''}${c.typed.replace(',', '.')}`);
+}
+
+function typeKey(c, key) {
+  if (key === 'back') c.typed = c.typed.slice(0, -1);
+  else if (key === ',') {
+    if (!c.typed.includes(',')) c.typed = c.typed ? `${c.typed},` : '0,';
+  } else if (c.typed.length < MAX_INPUT) {
+    c.typed = c.typed === '0' ? key : c.typed + key;
+  }
+  render(c);
+}
+
+// Касание графика выбирает ближайшую точку в пределах TAP_RADIUS единиц viewBox.
+function pickPoint(c, event) {
+  const svgNode = c.els.stage.querySelector('svg');
+  if (!svgNode || c.game.mode !== 'outlier' || c.game.phase !== 'pick') return;
+  const point = svgNode.createSVGPoint();
+  point.x = event.clientX;
+  point.y = event.clientY;
+  const local = point.matrixTransform(svgNode.getScreenCTM().inverse());
+  const round = currentRound(c);
+  const s = scatterScale(round);
+  let best = null;
+  let bestDistance = TAP_RADIUS;
+  round.points.forEach((p, k) => {
+    const distance = Math.hypot(s.px(p.x) - local.x, s.py(p.y) - local.y);
+    if (distance < bestDistance) {
+      best = k;
+      bestDistance = distance;
+    }
+  });
+  if (best === null) return;
+  c.selected = best;
+  render(c);
+}
+
+// ---------- Разбор ----------
+
+function revealText(c) {
+  const round = currentRound(c);
+  const result = currentResult(c);
+  const mode = c.game.mode;
+  if (mode === 'corr') return { feedback: `Ошибка ${formatR(Math.abs(result.answer - round.r))}`, explain: round.lesson };
+  if (mode === 'dist') {
+    const name = round.ask === 'median' ? 'Медиана' : 'Среднее';
+    return { feedback: `${name}: ${formatValue(round.truth)}, твой ответ ${formatValue(result.answer)}`, explain: round.lesson };
+  }
+  if (mode === 'share') return { feedback: `Доля: ${formatShare(round.truth)}, твой ответ ${formatShare(result.answer)}`, explain: round.lesson };
+  if (mode === 'trend') {
+    return { feedback: `2019: ${formatValue(round.truth)}, твой ответ ${formatValue(result.answer)}`, explain: trendLesson(result.answer, round) };
+  }
+  if (mode === 'outlier') {
+    const top = round.points[round.maxIndex].name;
+    const feedback = result.answer === round.maxIndex ? `Точно: ${top}` : `Твой выбор: ${round.points[result.answer].name}. Сильнее всех — ${top}`;
+    return { feedback, explain: round.lesson };
+  }
+  let verdict = 'Мимо';
+  if (result.hinted && result.score === HINT_CAP) verdict = 'Точно, с подсказкой';
+  else if (result.score === 10) verdict = 'Точно';
+  else if (result.score >= 7) verdict = 'Близко';
+  return { feedback: `${verdict}. Ответ: ${formatAnswer(round.answer)}${round.unit === '%' ? '' : ' '}${round.unit}`, explain: round.explain };
 }
 
 // Шкала от −1 до 1 с метками «ты» и «r».
@@ -200,142 +255,12 @@ function rScale(guess, r) {
   return wrap;
 }
 
-function metricsStage(c, stage) {
-  const round = currentRound(c);
-  const question = el('p', 'an-question', round.question);
-  const answer = el('div', 'an-answer');
-  const sign = el('button', 'an-sign', '±');
-  sign.type = 'button';
-  sign.dataset.act = 'sign';
-  sign.setAttribute('aria-label', 'Сменить знак');
-  sign.disabled = c.game.phase !== 'pick';
-  const shown = c.typed ? `${c.negative ? '−' : ''}${c.typed}` : 'Ответ';
-  const value = el('span', c.typed ? 'an-value' : 'an-value is-placeholder', shown);
-  answer.append(sign, value, el('span', 'an-unit', round.unit));
-  stage.append(question, answer);
-}
-
-function abStage(c, stage) {
-  const round = currentRound(c);
-  const reveal = c.game.phase === 'reveal';
-  const table = el('table', 'an-table');
-  table.innerHTML = '<thead><tr><th>Вариант</th><th>Посетители</th><th>Конверсии</th><th>CR</th></tr></thead>';
-  const body = el('tbody');
-  for (const [name, n, conv, rate] of [
-    ['A', round.nA, round.cA, round.test.pA],
-    ['B', round.nB, round.cB, round.test.pB],
-  ]) {
-    const row = el('tr');
-    row.classList.toggle('is-winner', reveal && round.test.winner === name);
-    for (const text of [name, n.toLocaleString('ru-RU'), conv.toLocaleString('ru-RU'), formatPercent(rate, 2)]) row.append(el('td', '', text));
-    body.append(row);
-  }
-  table.append(body);
-  stage.append(table);
-  if (!reveal) return;
-  const ci = el('div', 'an-ci-block');
-  ci.innerHTML = ciSvg(round.test);
-  ci.append(el('p', 'an-ci-caption', 'Разница B − A и 95% доверительный интервал, п.п.'));
-  stage.append(ci);
-}
-
-function renderStage(c) {
-  const stage = c.els.stage;
-  stage.replaceChildren();
-  stage.className = `an-stage an-stage-${c.game.mode}`;
-  if (c.game.mode === 'corr') stage.innerHTML = scatterSvg(currentRound(c), c.game.phase === 'reveal');
-  else if (c.game.mode === 'metrics') metricsStage(c, stage);
-  else abStage(c, stage);
-}
-
-// ---------- Ввод ----------
-
-function buildInput(c) {
-  const box = c.els.input;
-  if (c.game.mode === 'corr') {
-    c.slider = createSlider(box, { label: 'Коэффициент корреляции r', min: -1, max: 1, step: 0.01, value: 0, format: formatR });
-    return;
-  }
-  if (c.game.mode === 'metrics') {
-    const pad = el('div', 'an-numpad');
-    for (const key of ['1', '2', '3', '4', '5', '6', '7', '8', '9', ',', '0', 'back']) {
-      const button = el('button', 'an-key');
-      button.type = 'button';
-      button.dataset.key = key;
-      if (key === 'back') {
-        button.innerHTML = icon('backspace');
-        button.setAttribute('aria-label', 'Стереть');
-      } else button.textContent = key;
-      pad.append(button);
-    }
-    box.append(pad);
-    return;
-  }
-  const choices = el('div', 'an-choices');
-  for (const choice of ['A', 'B', 'none']) {
-    const button = el('button', 'btn an-choice', VERDICTS[choice]);
-    button.type = 'button';
-    button.dataset.choice = choice;
-    choices.append(button);
-  }
-  box.append(choices);
-}
-
-function typedValue(c) {
-  if (!/\d/.test(c.typed)) return null;
-  return Number(`${c.negative ? '-' : ''}${c.typed.replace(',', '.')}`);
-}
-
-function typeKey(c, key) {
-  if (key === 'back') c.typed = c.typed.slice(0, -1);
-  else if (key === ',') {
-    if (!c.typed.includes(',')) c.typed = c.typed ? `${c.typed},` : '0,';
-  } else if (c.typed.length < MAX_INPUT) {
-    c.typed = c.typed === '0' ? key : c.typed + key;
-  }
-  render(c);
-}
-
-// ---------- Разбор ответа ----------
-
-function revealText(c) {
-  const round = currentRound(c);
-  const result = currentResult(c);
-  if (c.game.mode === 'corr') {
-    return { feedback: `Ошибка ${formatR(Math.abs(result.answer - round.r))}`, explain: round.lesson };
-  }
-  if (c.game.mode === 'metrics') {
-    let verdict = 'Мимо';
-    if (result.score === 10) verdict = 'Точно';
-    else if (result.score >= 7) verdict = 'Близко';
-    return { feedback: `${verdict}. Ответ: ${formatAnswer(round.answer)}${round.unit === '%' ? '' : ' '}${round.unit}`, explain: round.explain };
-  }
-  const t = round.test;
-  const p = t.pValue < 0.001 ? 'p < 0,001' : `p = ${formatNumber(t.pValue, 3)}`;
-  const significance = t.pValue < 0.05 ? 'меньше 0,05: разница значима.' : 'больше 0,05: такую разницу легко получить случайно.';
-  const lift = t.pA > 0 ? ` (${t.diff >= 0 ? '+' : '−'}${formatNumber(Math.abs(t.diff / t.pA) * 100, 0)}%)` : '';
-  let explain = `${p} — ${significance} Разница B − A: ${formatNumber(t.diff * 100, 2)} п.п.${lift}, 95% ДИ от ${formatNumber(t.ciLow * 100, 2)} до ${formatNumber(t.ciHigh * 100, 2)} п.п.`;
-  if (t.winner === 'none') {
-    explain += Number.isFinite(t.neededN)
-      ? ` Чтобы надёжно поймать такую разницу, нужно около ${(Math.ceil(t.neededN / 100) * 100).toLocaleString('ru-RU')} посетителей в каждой группе.`
-      : ' Конверсии совпадают.';
-  }
-  const correct = result.score === 10;
-  return { feedback: correct ? `Верно: ${VERDICTS_INLINE[t.winner]}` : `Неверно, правильно: ${VERDICTS_INLINE[t.winner]}`, explain };
-}
-
 // ---------- Отрисовка ----------
-
-function captionFor(c) {
-  const round = currentRound(c);
-  if (c.game.mode === 'corr') return round.note;
-  if (c.game.mode === 'metrics') return 'Можно округлить до сотых';
-  return 'Уровень значимости 5%, двусторонний тест';
-}
 
 function render(c) {
   const { game, els } = c;
   if (!game) return;
+  const round = currentRound(c);
   els.mode.textContent = MODES.find((m) => m.value === game.mode).short;
   els.total.textContent = formatNumber(total(game));
   els.dots.replaceChildren();
@@ -345,8 +270,10 @@ function render(c) {
     dot.classList.toggle('is-current', k === game.index && game.phase !== 'reveal');
     els.dots.append(dot);
   }
+  els.ask.textContent = askFor(c);
+  els.ask.hidden = !els.ask.textContent;
   renderStage(c);
-  els.caption.textContent = captionFor(c);
+  els.caption.textContent = game.mode === 'metrics' ? 'Можно округлить до сотых' : round.note;
   const revealed = game.phase === 'reveal';
   els.input.classList.toggle('is-hidden', revealed);
   els.result.classList.toggle('is-hidden', !revealed);
@@ -357,13 +284,14 @@ function render(c) {
     els.explain.textContent = explain;
     els.explain.hidden = !explain;
     els.scale.replaceChildren();
-    if (game.mode === 'corr') els.scale.append(rScale(currentResult(c).answer, currentRound(c).r));
+    if (game.mode === 'corr') els.scale.append(rScale(currentResult(c).answer, round.r));
   }
-  const choosing = game.mode === 'ab' && game.phase === 'pick';
-  els.action.classList.toggle('is-invisible', choosing);
   if (game.phase === 'pick') els.action.textContent = 'Ответить';
   else els.action.textContent = game.index === game.rounds.length - 1 ? 'Итоги' : 'Дальше';
-  els.action.disabled = game.mode === 'metrics' && game.phase === 'pick' && typedValue(c) === null;
+  let disabled = false;
+  if (game.phase === 'pick' && game.mode === 'metrics') disabled = typedValue(c) === null;
+  if (game.phase === 'pick' && game.mode === 'outlier') disabled = c.selected === null;
+  els.action.disabled = disabled;
 }
 
 // ---------- Ход игры ----------
@@ -371,7 +299,8 @@ function render(c) {
 function startRound(c) {
   c.typed = '';
   c.negative = false;
-  if (c.slider) setSliderValue(c.slider, 0);
+  c.selected = null;
+  buildInput(c);
   render(c);
   if (c.slider) c.slider.track.focus({ preventScroll: true });
 }
@@ -387,8 +316,12 @@ function summaryRow(game) {
     const error = game.results.reduce((sum, r, k) => sum + Math.abs(r.answer - game.rounds[k].r), 0) / game.results.length;
     return resultRow('Средняя ошибка r', formatR(error));
   }
-  const exact = game.results.filter((r) => r.score === 10).length;
-  return resultRow(game.mode === 'metrics' ? 'Точных ответов' : 'Верных решений', `${exact} из ${ROUNDS}`);
+  if (game.mode === 'outlier') {
+    const exact = game.results.filter((r, k) => r.answer === game.rounds[k].maxIndex).length;
+    return resultRow('Главный выброс найден', `${exact} из ${ROUNDS}`);
+  }
+  const good = game.results.filter((r) => r.score >= 8).length;
+  return resultRow('Ответов на 8+ очков', `${good} из ${ROUNDS}`);
 }
 
 function showResults(c) {
@@ -427,10 +360,15 @@ function act(c, name) {
     c.negative = !c.negative;
     return render(c);
   }
+  if (name === 'hint') {
+    showHint(c.game);
+    return render(c);
+  }
   if (name !== 'action') return;
   if (c.game.phase === 'pick') {
-    if (c.game.mode === 'corr') answerNow(c, c.slider.value);
-    if (c.game.mode === 'metrics') answerNow(c, typedValue(c));
+    if (c.slider) answerNow(c, c.slider.value);
+    else if (c.game.mode === 'metrics') answerNow(c, typedValue(c));
+    else if (c.game.mode === 'outlier') answerNow(c, c.selected);
     return;
   }
   if (c.game.phase !== 'reveal') return;
@@ -439,19 +377,16 @@ function act(c, name) {
   else startRound(c);
 }
 
-const AB_KEYS = { a: 'A', ф: 'A', b: 'B', и: 'B', n: 'none', т: 'none', 0: 'none' };
-
 function onKeyDown(event) {
   const c = ctx;
   if (!c || !c.game || isOverlayOpen() || event.ctrlKey || event.metaKey || event.altKey) return;
   const key = event.key;
+  const typing = c.game.mode === 'metrics' && c.game.phase === 'pick';
   if (key === 'Enter') act(c, 'action');
-  else if (c.game.phase !== 'pick') return;
-  else if (c.game.mode === 'metrics' && /^\d$/.test(key)) typeKey(c, key);
-  else if (c.game.mode === 'metrics' && (key === ',' || key === '.')) typeKey(c, ',');
-  else if (c.game.mode === 'metrics' && key === 'Backspace') typeKey(c, 'back');
-  else if (c.game.mode === 'metrics' && key === '-') act(c, 'sign');
-  else if (c.game.mode === 'ab' && AB_KEYS[key.toLowerCase()]) answerNow(c, AB_KEYS[key.toLowerCase()]);
+  else if (typing && /^\d$/.test(key)) typeKey(c, key);
+  else if (typing && (key === ',' || key === '.')) typeKey(c, ',');
+  else if (typing && key === 'Backspace') typeKey(c, 'back');
+  else if (typing && key === '-') act(c, 'sign');
   else return;
   event.preventDefault();
 }
@@ -459,20 +394,22 @@ function onKeyDown(event) {
 // ---------- Жизненный цикл ----------
 
 export async function mountAnalyst(root, mode, { onExit }) {
-  const screen = el('div', 'screen analyst');
+  const screen = el('div', `screen analyst analyst-${mode}`);
   screen.innerHTML = SCREEN_HTML;
   root.append(screen);
   ctx = {
-    game: { mode },
+    game: null,
     data: null,
     onExit,
     slider: null,
+    selected: null,
     typed: '',
     negative: false,
     els: {
       mode: screen.querySelector('.an-mode'),
       dots: screen.querySelector('.an-dots'),
       total: screen.querySelector('.an-total'),
+      ask: screen.querySelector('.an-ask'),
       stage: screen.querySelector('.an-stage'),
       caption: screen.querySelector('.an-caption'),
       input: screen.querySelector('.an-input'),
@@ -485,22 +422,17 @@ export async function mountAnalyst(root, mode, { onExit }) {
     },
   };
   const c = ctx;
-  buildInput(c);
-  c.game = null;
   screen.addEventListener('click', (event) => {
     const key = event.target.closest('[data-key]');
-    const choice = event.target.closest('[data-choice]');
     const action = event.target.closest('[data-act]');
     if (key && c.game && c.game.phase === 'pick') typeKey(c, key.dataset.key);
-    else if (choice && c.game && c.game.phase === 'pick') answerNow(c, choice.dataset.choice);
     else if (action) act(c, action.dataset.act);
   });
+  c.els.stage.addEventListener('pointerdown', (event) => c.game && pickPoint(c, event));
   document.addEventListener('keydown', onKeyDown);
-  if (mode === 'corr') {
-    c.els.caption.textContent = 'Загружаю данные…';
-    c.data = await loadCorrelationData();
-    if (ctx !== c) return;
-  }
+  c.els.caption.textContent = 'Загружаю данные…';
+  c.data = await loadData(mode);
+  if (ctx !== c) return;
   c.game = createGame(mode, Math.random, c.data);
   startRound(c);
 }

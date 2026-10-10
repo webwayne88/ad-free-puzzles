@@ -33,7 +33,7 @@ function route() {
   unmountAnalyst();
   closeAllOverlays();
   root.replaceChildren();
-  const analyst = location.hash.match(/^#\/analyst\/(corr|metrics|ab)$/);
+  const analyst = location.hash.match(/^#\/analyst\/(corr|dist|trend|outlier|share|metrics)$/);
   if (analyst) {
     mountAnalyst(root, analyst[1], { onExit: exitToHome });
     return;

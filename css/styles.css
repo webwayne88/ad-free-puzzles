@@ -1187,8 +1187,194 @@ button:disabled {
   width: var(--board);
 }
 
-.an-stage-corr {
+.an-stage-corr,
+.an-stage-dist,
+.an-stage-trend,
+.an-stage-outlier,
+.an-stage-share {
   height: calc(var(--board) * 0.75);
+}
+
+.an-stage-outlier {
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.an-ask {
+  margin: 2px 8px 8px;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.an-instruction {
+  margin: 0;
+  padding: 10px 0 2px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 15px;
+}
+
+.an-hint {
+  align-self: flex-start;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: var(--hl-area);
+  color: var(--accent);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.an-formula {
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--surface);
+  font-size: 15px;
+  line-height: 1.4;
+  color: var(--accent);
+  animation: fade-in 0.2s ease both;
+}
+
+.an-bar {
+  fill: var(--accent);
+  fill-opacity: 0.35;
+}
+
+.an-dot {
+  fill: var(--muted);
+  fill-opacity: 0.55;
+  transition: fill 0.25s ease;
+}
+
+.an-dot.is-above {
+  fill: var(--accent);
+  fill-opacity: 0.9;
+}
+
+.an-dot.is-below {
+  fill: var(--muted);
+  fill-opacity: 0.3;
+}
+
+.an-marker {
+  stroke-width: 0.6;
+}
+
+.an-marker.is-guess {
+  stroke: var(--muted);
+  stroke-dasharray: 1.4 1;
+}
+
+.an-marker.is-truth {
+  stroke: var(--accent);
+}
+
+.an-marker.is-other {
+  stroke: #f08c62;
+}
+
+.an-marker-label {
+  font-family: var(--font);
+  font-size: 2.8px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.an-marker-label.is-guess {
+  fill: var(--muted);
+}
+
+.an-marker-label.is-truth {
+  fill: var(--accent);
+}
+
+.an-marker-label.is-other {
+  fill: #f08c62;
+}
+
+.an-series {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 0.8;
+  stroke-linejoin: round;
+}
+
+.an-actual {
+  fill: none;
+  stroke: var(--text);
+  stroke-width: 0.8;
+  stroke-linejoin: round;
+}
+
+.an-naive,
+.an-guess-line {
+  stroke: var(--muted);
+  stroke-width: 0.5;
+  stroke-dasharray: 1.4 1;
+}
+
+.an-future {
+  fill: var(--hl-area);
+  opacity: 0.6;
+}
+
+.an-mark.is-guess {
+  fill: var(--surface);
+  stroke: var(--muted);
+  stroke-width: 0.6;
+}
+
+.an-mark.is-truth {
+  fill: var(--accent);
+  stroke: var(--surface);
+  stroke-width: 0.5;
+}
+
+.an-stage-outlier .an-mark.is-guess {
+  fill: none;
+  stroke: var(--text);
+  stroke-width: 0.6;
+}
+
+.an-stage-outlier .an-mark.is-truth {
+  fill: none;
+  stroke: var(--error);
+  stroke-width: 0.7;
+}
+
+.an-residual {
+  stroke-width: 0.5;
+}
+
+.an-residual.is-truth {
+  stroke: var(--error);
+}
+
+.an-residual.is-guess {
+  stroke: var(--muted);
+  stroke-dasharray: 1 0.8;
+}
+
+.an-point-label {
+  font-family: var(--font);
+  font-size: 3px;
+  font-weight: 600;
+  paint-order: stroke;
+  stroke: var(--surface);
+  stroke-width: 0.8;
+}
+
+.an-point-label.is-truth {
+  fill: var(--accent);
+}
+
+.an-stage-outlier .an-point-label.is-truth {
+  fill: var(--error);
+}
+
+.an-point-label.is-guess {
+  fill: var(--text);
 }
 
 .an-plot {
@@ -1505,6 +1691,18 @@ button:disabled {
 }
 
 .an-track {
+  background: var(--hl-area);
+}
+
+.an-zero {
+  display: none;
+}
+
+.an-track.is-signed .an-zero {
+  display: block;
+}
+
+.an-track.is-signed {
   background: linear-gradient(
     to right,
     color-mix(in srgb, var(--error) 35%, var(--hl-area)),

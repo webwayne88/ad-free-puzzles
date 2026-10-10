@@ -1,3 +1,4 @@
+import { sourceNote } from './dataset.js';
 import { gauss, linearFit, pearson, shuffle } from './stats.js';
 
 const REAL_ROUNDS = 8;
@@ -31,7 +32,7 @@ export function realPairs(data) {
         const x = a.values[k];
         const y = b.values[k];
         if (x === null || y === null || (a.log && x <= 0) || (b.log && y <= 0)) continue;
-        points.push({ x: transform(a, x), y: transform(b, y) });
+        points.push({ x: transform(a, x), y: transform(b, y), name: data.names[k] });
       }
       pairs.push({ a, b, points, r: pearson(points) });
     }
@@ -39,10 +40,10 @@ export function realPairs(data) {
   return pairs;
 }
 
-function realRound(pair, swap, year) {
+export function realRound(pair, swap, period) {
   const x = swap ? pair.b : pair.a;
   const y = swap ? pair.a : pair.b;
-  const points = swap ? pair.points.map((p) => ({ x: p.y, y: p.x })) : pair.points;
+  const points = swap ? pair.points.map((p) => ({ x: p.y, y: p.x, name: p.name })) : pair.points;
   const r = roundR(pair.r);
   return {
     kind: 'real',
@@ -53,9 +54,11 @@ function realRound(pair, swap, year) {
     yTitle: axisTitle(y),
     xLog: x.log,
     yLog: y.log,
+    xIndicator: x,
+    yIndicator: y,
     ticks: true,
     lesson: realLesson(r),
-    note: `${points.length} стран, около ${year} г. Данные: ${[...new Set([x.short, y.short])].join(', ')} через Our World in Data`,
+    note: sourceNote(points.length, period, [x.short, y.short]),
   };
 }
 
@@ -103,7 +106,7 @@ export function createCorrelationRounds(rng, data) {
     const bucket = buckets[k % buckets.length];
     if (bucket.length) chosen.push(bucket.shift());
   }
-  const rounds = chosen.map((pair) => realRound(pair, rng() < 0.5, data.year));
+  const rounds = chosen.map((pair) => realRound(pair, rng() < 0.5, data.period));
   rounds.push(syntheticRound(rng, 'outlier'), syntheticRound(rng, 'curve'));
   return shuffle(rounds, rng);
 }

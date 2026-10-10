@@ -1,13 +1,17 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { createAbRound, scoreAb } from '../js/analyst/abtest.js';
 import { createCorrelationRounds, realPairs, scoreCorrelation } from '../js/analyst/correlation.js';
-import { ROUNDS, createGame, next, submit, total } from '../js/analyst/game.js';
+import { createDistributionRounds, scoreDistribution } from '../js/analyst/distribution.js';
+import { HINT_CAP, ROUNDS, createGame, next, showHint, submit, total } from '../js/analyst/game.js';
 import { createMetricsRounds, scoreNumber } from '../js/analyst/metrics.js';
-import { linearFit, normCdf, pearson, twoProportionTest } from '../js/analyst/stats.js';
+import { createOutlierRounds, scoreOutlier } from '../js/analyst/outlier.js';
+import { createShareRounds, scoreShare } from '../js/analyst/share.js';
+import { linearFit, mean, pearson, quantile, roundNice } from '../js/analyst/stats.js';
+import { createTrendRounds, scoreTrend } from '../js/analyst/trend.js';
 
 const DATA = JSON.parse(readFileSync(new URL('../data/correlations.json', import.meta.url)));
+const TRENDS = JSON.parse(readFileSync(new URL('../data/trends.json', import.meta.url)));
 
 function seeded(seed) {
   let a = seed >>> 0;
@@ -18,19 +22,6 @@ function seeded(seed) {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
-
-test('нормальное распределение и z-тест для двух долей', () => {
-  assert.ok(Math.abs(normCdf(1.96) - 0.975) < 1e-4);
-  assert.ok(Math.abs(normCdf(0) - 0.5) < 1e-9);
-  const t = twoProportionTest(1000, 100, 1000, 130);
-  assert.ok(Math.abs(t.z - 2.103) < 0.01);
-  assert.ok(Math.abs(t.pValue - 0.0355) < 0.002);
-  assert.equal(t.winner, 'B');
-  assert.ok(t.ciLow > 0 && t.ciHigh > t.ciLow);
-  const same = twoProportionTest(1000, 100, 1000, 104);
-  assert.equal(same.winner, 'none');
-  assert.ok(same.neededN > 1000);
-});
 
 test('корреляция и линия тренда', () => {
   const line = [1, 2, 3, 4, 5].map((x) => ({ x, y: 2 * x + 1 }));
@@ -95,19 +86,6 @@ test('очки за число: точный ответ с допуском 1%, 
   assert.equal(scoreNumber(-25, -25), 10);
 });
 
-test('A/B: исход сценария совпадает со статистикой, встречаются все три варианта', () => {
-  const rng = seeded(3);
-  const winners = new Set();
-  for (let k = 0; k < 60; k++) {
-    const round = createAbRound(rng);
-    const check = twoProportionTest(round.nA, round.cA, round.nB, round.cB);
-    assert.equal(check.winner, round.test.winner);
-    assert.equal(scoreAb(round.test.winner, round), 10);
-    winners.add(round.test.winner);
-  }
-  assert.deepEqual([...winners].sort(), ['A', 'B', 'none']);
-});
-
 test('ход партии: 10 раундов, ответ → разбор → следующий → итог', () => {
   const game = createGame('metrics', seeded(4));
   for (let k = 0; k < ROUNDS; k++) {
@@ -117,7 +95,7 @@ test('ход партии: 10 раундов, ответ → разбор → с
   }
   assert.equal(game.phase, 'done');
   assert.equal(total(game), 100);
-  const corr = createGame('corr', seeded(5), DATA);
+  const corr = createGame('corr', seeded(5), { countries: DATA });
   assert.equal(corr.rounds.length, ROUNDS);
 });
 
@@ -129,5 +107,76 @@ test('разбор воронки использует точную долю: 2,
       .slice(1)
       .map((s) => Number(s.replace(/\s/g, '').replace(',', '.')));
     assert.ok(Math.abs(orders / fraction - round.answer) < 1e-6, round.explain);
+  }
+});
+
+test('квантили, «круглые» пороги и среднее', () => {
+  assert.equal(quantile([1, 2, 3, 4], 0.5), 2.5);
+  assert.equal(quantile([5], 0.9), 5);
+  assert.equal(mean([1, 2, 3, 6]), 3);
+  assert.equal(roundNice(13487), 13000);
+  assert.equal(roundNice(72.3), 72);
+});
+
+test('среднее и медиана: разные показатели, вопросы чередуются, ответ внутри оси', () => {
+  const rounds = createDistributionRounds(seeded(6), DATA, ROUNDS);
+  assert.equal(rounds.length, ROUNDS);
+  assert.equal(new Set(rounds.map((r) => r.title)).size, ROUNDS);
+  assert.equal(rounds.filter((r) => r.ask === 'median').length, ROUNDS / 2);
+  for (const r of rounds) {
+    assert.ok(r.truth >= r.lo && r.truth <= r.hi);
+    assert.equal(r.bins.reduce((a, b) => a + b, 0), r.values.length);
+    assert.equal(scoreDistribution(r.truth, r), 10);
+  }
+  const gdp = rounds.find((r) => r.title.startsWith('ВВП'));
+  assert.ok(gdp.mean > gdp.median * 1.15 && gdp.lesson.includes('вправо'));
+});
+
+test('доля выше порога: порог круглый, доля посчитана честно', () => {
+  for (const r of createShareRounds(seeded(7), DATA, ROUNDS)) {
+    assert.equal(r.above, r.values.filter((v) => v > r.threshold).length);
+    assert.ok(r.truth > 0.05 && r.truth < 0.95);
+    assert.equal(scoreShare(r.truth, r), 10);
+    assert.equal(scoreShare(r.truth + 0.05, r), 8);
+  }
+});
+
+test('выброс: самая далёкая от тренда страна даёт 10, ближайшая к тренду — около 0', () => {
+  const rounds = createOutlierRounds(seeded(8), DATA, ROUNDS);
+  assert.equal(rounds.length, ROUNDS);
+  for (const r of rounds) {
+    assert.ok(Math.abs(r.r) >= 0.6);
+    assert.equal(scoreOutlier(r.maxIndex, r), 10);
+    const closest = r.residuals.reduce((best, v, k) => (Math.abs(v) < Math.abs(r.residuals[best]) ? k : best), 0);
+    assert.ok(scoreOutlier(closest, r) < 0.5);
+    assert.ok(r.lesson.startsWith(r.points[r.maxIndex].name));
+  }
+});
+
+test('тренд: показано 2000–2014, загадан 2019, ось вмещает ответ', () => {
+  const rounds = createTrendRounds(seeded(9), TRENDS, ROUNDS);
+  assert.equal(rounds.length, ROUNDS);
+  for (const r of rounds) {
+    assert.equal(r.years[r.cut], 2014);
+    assert.equal(r.truth, r.values[19]);
+    assert.ok(r.truth >= r.lo && r.truth <= r.hi && r.country);
+    assert.equal(scoreTrend(r.truth, r), 10);
+  }
+});
+
+test('подсказка с формулой ограничивает раунд', () => {
+  const game = createGame('metrics', seeded(10));
+  showHint(game);
+  assert.equal(submit(game, game.rounds[0].answer).score, HINT_CAP);
+  next(game);
+  assert.equal(game.hinted, false);
+  assert.equal(submit(game, game.rounds[1].answer).score, 10);
+  assert.ok(game.rounds.every((r) => r.formula.includes('=')));
+});
+
+test('все режимы собираются из данных', () => {
+  const data = { countries: DATA, trends: TRENDS };
+  for (const mode of ['corr', 'dist', 'trend', 'outlier', 'share', 'metrics']) {
+    assert.equal(createGame(mode, seeded(11), data).rounds.length, ROUNDS, mode);
   }
 });

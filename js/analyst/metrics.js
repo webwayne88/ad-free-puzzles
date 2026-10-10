@@ -17,6 +17,7 @@ const TEMPLATES = [
     const clicks = Math.round((shows * pick(rng, [0.5, 0.8, 1, 1.2, 1.5, 2, 2.5, 3, 4])) / 100);
     const answer = (clicks / shows) * 100;
     return {
+      formula: 'CTR = клики / показы × 100%',
       question: `Показов ${f(shows)}, кликов ${f(clicks)}. Какой CTR?`,
       answer,
       unit: '%',
@@ -28,6 +29,7 @@ const TEMPLATES = [
     const orders = Math.round((visits * pick(rng, [0.8, 1.5, 2, 2.5, 3.2, 4, 5])) / 100);
     const answer = (orders / visits) * 100;
     return {
+      formula: 'Конверсия = заказы / визиты × 100%',
       question: `Визитов ${f(visits)}, заказов ${f(orders)}. Какая конверсия?`,
       answer,
       unit: '%',
@@ -39,6 +41,7 @@ const TEMPLATES = [
     const delta = pick(rng, [0.5, 1, 2]);
     const answer = (delta / from) * 100;
     return {
+      formula: 'Относительный рост = (новое − старое) / старое × 100%',
       question: `Конверсия выросла с ${f(from)}% до ${f(from + delta)}%. На сколько процентов она выросла?`,
       answer,
       unit: '%',
@@ -50,6 +53,7 @@ const TEMPLATES = [
     const up = pick(rng, [10, 20, 25, 40, 50]);
     const answer = ((1 - down / 100) * (1 + up / 100) - 1) * 100;
     return {
+      formula: 'Итог = (1 − падение) × (1 + рост) − 1',
       question: `Выручка упала на ${down}%, а затем выросла на ${up}%. Как она изменилась за весь период?`,
       answer,
       unit: '%',
@@ -61,6 +65,7 @@ const TEMPLATES = [
     const profit = spend * pick(rng, [0.5, 0.8, 1.2, 1.5, 2, 3]);
     const answer = ((profit - spend) / spend) * 100;
     return {
+      formula: 'ROMI = (прибыль − расходы) / расходы × 100%',
       question: `Кампания стоила ${f(spend)} тыс. ₽ и принесла ${f(profit)} тыс. ₽ валовой прибыли. Какой ROMI?`,
       answer,
       unit: '%',
@@ -72,6 +77,7 @@ const TEMPLATES = [
     const clients = pick(rng, [50, 75, 100, 120, 150, 200, 250, 300]);
     const answer = (budget * 1000) / clients;
     return {
+      formula: 'CAC = расходы на привлечение / новые клиенты',
       question: `На рекламу потратили ${f(budget)} тыс. ₽ и привели ${f(clients)} новых клиентов. Какой CAC?`,
       answer,
       unit: '₽',
@@ -84,6 +90,7 @@ const TEMPLATES = [
     const buy = pick(rng, [20, 25, 40, 50]);
     const answer = (visits * cart * buy) / 10000;
     return {
+      formula: 'Заказы = визиты × доля корзины × доля оформления',
       question: `${f(visits)} визитов, ${cart}% добавляют товар в корзину, ${buy}% из них оформляют заказ. Сколько заказов?`,
       answer,
       unit: 'заказов',
@@ -95,6 +102,7 @@ const TEMPLATES = [
     const cr = pick(rng, [1, 2, 2.5, 4, 5]);
     const answer = (orders / cr) * 100;
     return {
+      formula: 'Визиты = нужные заказы / конверсия',
       question: `Нужно ${f(orders)} заказов, конверсия сайта ${f(cr)}%. Сколько нужно визитов?`,
       answer,
       unit: 'визитов',
@@ -106,6 +114,7 @@ const TEMPLATES = [
     const orders = pick(rng, [400, 600, 800, 1200]);
     const answer = (revenue * 1e6) / orders;
     return {
+      formula: 'Средний чек = выручка / число заказов',
       question: `Выручка ${f(revenue)} млн ₽ за ${f(orders)} заказов. Какой средний чек?`,
       answer,
       unit: '₽',
@@ -117,6 +126,7 @@ const TEMPLATES = [
     const months = pick(rng, [2, 3, 4]);
     const answer = ((1 + growth / 100) ** months - 1) * 100;
     return {
+      formula: 'Рост за n периодов = (1 + r)ⁿ − 1',
       question: `Аудитория растёт на ${growth}% в месяц. На сколько процентов она вырастет за ${months} месяца?`,
       answer,
       unit: '%',
@@ -129,6 +139,7 @@ const TEMPLATES = [
     const margin = pick(rng, [20, 25, 30, 40, 50]);
     const answer = (check * purchases * margin) / 100;
     return {
+      formula: 'LTV по марже = средний чек × покупки × маржа',
       question: `Средний чек ${f(check)} ₽, клиент делает ${purchases} ${purchases < 5 ? 'покупки' : 'покупок'}, маржа ${margin}%. Какой LTV по марже?`,
       answer,
       unit: '₽',
@@ -141,6 +152,7 @@ const TEMPLATES = [
     const chose = pick(rng, [10, 15, 20, 25, 50]);
     const answer = (total * menShare * chose) / 10000;
     return {
+      formula: 'Ответ = всего × доля группы × доля внутри группы',
       question: `Из ${f(total)} респондентов ${menShare}% — мужчины, и ${chose}% из них выбрали вариант A. Сколько это человек?`,
       answer,
       unit: 'чел.',
