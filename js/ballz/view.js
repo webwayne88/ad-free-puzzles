@@ -11,7 +11,6 @@ const FONT = "Roboto, system-ui, -apple-system, 'Segoe UI', sans-serif";
 const SHIFT_MS = 240;
 const FLASH_MS = 90;
 const PARTICLE_MS = 450;
-const BOOST_AFTER_S = 1.5;
 const BOOST_SPEED = 4;
 const DRAG_THRESHOLD_PX = 14;
 const AIM_DOT_STEP = 0.34;
@@ -241,7 +240,7 @@ function frame(now) {
     c.turnSeconds += dt;
     handleEvents(c, step(c.state, dt * speedFor(c.turnSeconds, c.boosted)), now);
   }
-  c.els.boost.hidden = !(c.state.phase === 'fly' && c.turnSeconds > BOOST_AFTER_S && !c.boosted);
+  c.els.boost.hidden = !(c.state.phase === 'fly' && !c.boosted);
   draw(c, now);
 }
 
