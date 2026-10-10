@@ -1,7 +1,7 @@
-import { loadGame as loadBallzGame, newGame as newBallzGame } from './ballz/session.js';
-import { mountBallz, unmountBallz } from './ballz/view.js';
 import { renderHome } from './home.js';
 import { mountHues, unmountHues } from './hues/view.js';
+import { loadGame as loadRicochetGame, newGame as newRicochetGame } from './ricochet/session.js';
+import { mountRicochet, unmountRicochet } from './ricochet/view.js';
 import { applyTheme, loadSettings } from './settings.js';
 import { loadGame } from './sudoku/session.js';
 import { mountSudoku, unmountSudoku } from './sudoku/view.js';
@@ -27,7 +27,7 @@ function exitToHome() {
 
 function route() {
   unmountSudoku();
-  unmountBallz();
+  unmountRicochet();
   unmountHues();
   closeAllOverlays();
   root.replaceChildren();
@@ -35,8 +35,8 @@ function route() {
     mountHues(root, location.hash.slice('#/hues/'.length), { onExit: exitToHome });
     return;
   }
-  if (location.hash === '#/ballz') {
-    mountBallz(root, loadBallzGame() ?? newBallzGame(), { onExit: exitToHome });
+  if (location.hash === '#/ricochet') {
+    mountRicochet(root, loadRicochetGame() ?? newRicochetGame(), { onExit: exitToHome });
     return;
   }
   if (location.hash === '#/sudoku') {

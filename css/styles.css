@@ -801,9 +801,9 @@ button:disabled {
   }
 }
 
-/* ---------- Ballz ---------- */
+/* ---------- Рикошет ---------- */
 
-.ballz {
+.ricochet {
   height: var(--vh);
   min-height: 0;
   overflow: hidden;
@@ -813,7 +813,7 @@ button:disabled {
   -webkit-user-select: none;
 }
 
-.ballz .topbar {
+.ricochet .topbar {
   max-width: calc(var(--field-w, 100%) + 8px);
 }
 

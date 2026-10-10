@@ -363,8 +363,8 @@ function onThemeChange() {
 const themeObserver = new MutationObserver(onThemeChange);
 const darkQuery = matchMedia('(prefers-color-scheme: dark)');
 
-export function mountBallz(root, state, { onExit }) {
-  const screen = el('div', 'screen ballz');
+export function mountRicochet(root, state, { onExit }) {
+  const screen = el('div', 'screen ricochet');
   screen.innerHTML = SCREEN_HTML;
   root.append(screen);
   const now = performance.now();
@@ -426,7 +426,7 @@ export function mountBallz(root, state, { onExit }) {
   c.raf = requestAnimationFrame(frame);
 }
 
-export function unmountBallz() {
+export function unmountRicochet() {
   if (!ctx) return;
   cancelAnimationFrame(ctx.raf);
   ctx.observer.disconnect();

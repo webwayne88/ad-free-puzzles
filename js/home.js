@@ -1,6 +1,6 @@
-import { loadBest as loadBallzBest, loadGame as loadBallzGame, newGame as newBallzGame } from './ballz/session.js';
 import { formatScore, loadStats as loadHuesStats } from './hues/session.js';
 import { icon } from './icons.js';
+import { loadBest as loadRicochetBest, loadGame as loadRicochetGame, newGame as newRicochetGame } from './ricochet/session.js';
 import { chooseTheme } from './settings.js';
 import { difficultyLabel, formatTime, loadGame, newGame } from './sudoku/session.js';
 import { chooseDifficulty } from './sudoku/view.js';
@@ -58,23 +58,23 @@ function sudokuCard(onOpen) {
   });
 }
 
-function ballzCard(onOpen) {
-  const saved = loadBallzGame();
-  const best = loadBallzBest();
+function ricochetCard(onOpen) {
+  const saved = loadRicochetGame();
+  const best = loadRicochetBest();
   const startNew = () => {
-    newBallzGame();
-    onOpen('ballz');
+    newRicochetGame();
+    onOpen('ricochet');
   };
   let desc = 'Шарики против блоков с числами';
   if (best) desc = `Рекорд: ${best}`;
   if (saved && saved.level > 1) desc = `Не закончено: уровень ${saved.level}`;
   return gameCard({
-    logo: 'icons/ballz.svg',
-    name: 'Ballz',
+    logo: 'icons/ricochet.svg',
+    name: 'Рикошет',
     desc,
     actions:
       saved && saved.level > 1
-        ? [button('Новая игра', false, startNew), button('Продолжить', true, () => onOpen('ballz'))]
+        ? [button('Новая игра', false, startNew), button('Продолжить', true, () => onOpen('ricochet'))]
         : [button('Играть', true, startNew)],
   });
 }
@@ -100,6 +100,6 @@ export function renderHome(root, { onOpen }) {
   const screen = el('div', 'screen home');
   screen.innerHTML = HOME_HTML;
   screen.querySelector('[data-act="theme"]').addEventListener('click', () => chooseTheme());
-  screen.querySelector('.game-list').append(sudokuCard(onOpen), ballzCard(onOpen), huesCard(onOpen));
+  screen.querySelector('.game-list').append(sudokuCard(onOpen), ricochetCard(onOpen), huesCard(onOpen));
   root.append(screen);
 }

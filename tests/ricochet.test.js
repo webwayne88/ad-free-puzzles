@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { COLS, FLOOR, R, ROWS, clampAim, aimEnd, createGame, inDanger, launch, restore, snapshot, step } from '../js/ballz/engine.js';
+import { COLS, FLOOR, R, ROWS, clampAim, aimEnd, createGame, inDanger, launch, restore, snapshot, step } from '../js/ricochet/engine.js';
 
 function seeded(seed) {
   let a = seed >>> 0;
