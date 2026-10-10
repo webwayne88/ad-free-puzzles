@@ -5,6 +5,8 @@ import { chooseTheme } from '../settings.js';
 import { el, isOverlayOpen, openOverlay, resultRow } from '../ui.js';
 
 const BLOCK_TEXT = '#141826';
+// Шар из кольца — другого цвета, пока не присоединится к остальным.
+const DROP_COLOR = '#4fb3a0';
 const FONT = "Roboto, system-ui, -apple-system, 'Segoe UI', sans-serif";
 const SHIFT_MS = 240;
 const FLASH_MS = 90;
@@ -188,6 +190,8 @@ function draw(c, now) {
   drawAim(c, u);
   g.fillStyle = c.colors.ball;
   for (const ball of c.state.balls) drawBall(g, ball.x, ball.y, u);
+  g.fillStyle = DROP_COLOR;
+  for (const drop of c.state.drops) drawBall(g, drop.x, drop.y, u);
   drawLauncher(c, u);
   drawParticles(c, u, now);
 }

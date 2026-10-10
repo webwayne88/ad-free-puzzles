@@ -63,6 +63,24 @@ test('шар отражается от стен и потолка и призе�
   assert.notEqual(state.launchX, 3.5);
 });
 
+test('шар из кольца падает вертикально, ждёт на полу и собирается к первому упавшему', () => {
+  const state = emptyGame({ launchX: 1.5, rings: [{ c: 5, r: 5 }] });
+  launch(state, clampAim(1, -1.1));
+  let sawDrop = false;
+  let landedAtRing = false;
+  for (let t = 0; t < 20 && state.phase === 'fly'; t += 1 / 120) {
+    step(state, 1 / 120, seeded(10));
+    for (const drop of state.drops) {
+      sawDrop = true;
+      assert.equal(drop.x === 5.5 || drop.landed, true);
+      if (drop.landed && drop.x === 5.5) landedAtRing = true;
+    }
+  }
+  assert.ok(sawDrop && landedAtRing);
+  assert.equal(state.ballCount, 2);
+  assert.equal(state.drops.length, 0);
+});
+
 test('кольцо даёт шар на следующий ход', () => {
   const state = emptyGame({ rings: [{ c: 3, r: 5 }] });
   launch(state, clampAim(0, -1));

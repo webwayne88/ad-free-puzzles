@@ -8,6 +8,7 @@ export const GAP = 0.05;
 export const RING_R = 0.22;
 export const SPEED = 16;
 export const INTERVAL = 0.055;
+const GRAVITY = 30;
 const MAX_STEP = R / 2;
 const MIN_VY = 0.12;
 const MIN_AIM = Math.sin((8 * Math.PI) / 180);
@@ -64,7 +65,7 @@ export function restore(data) {
     toLaunch: 0,
     launchTimer: 0,
     firstLandX: null,
-    gained: 0,
+    drops: [],
     turnTime: 0,
   };
 }
@@ -162,7 +163,7 @@ function collectRings(state, ball, events) {
     const ring = state.rings[k];
     if (Math.hypot(ball.x - (ring.c + 0.5), ball.y - (ring.r + 0.5)) >= R + RING_R) continue;
     state.rings.splice(k, 1);
-    state.gained++;
+    state.drops.push({ x: ring.c + 0.5, y: ring.r + 0.5, vy: 0, landed: false });
     events.push({ type: 'ring', ring });
   }
 }
@@ -202,7 +203,8 @@ function moveBall(state, grid, ball, distance, events) {
 }
 
 function endTurn(state, rng, events) {
-  state.ballCount += state.gained;
+  state.ballCount += state.drops.length;
+  state.drops = [];
   state.launchX = state.firstLandX ?? state.launchX;
   state.balls = [];
   for (const block of state.blocks) block.r++;
@@ -227,9 +229,29 @@ export function launch(state, dir) {
   state.toLaunch = state.ballCount;
   state.launchTimer = INTERVAL;
   state.firstLandX = null;
-  state.gained = 0;
+  state.drops = [];
   state.turnTime = 0;
   return true;
+}
+
+// Шар из кольца падает вертикально под силой тяжести и ждёт на полу.
+function fall(drop, dt) {
+  if (drop.landed) return;
+  drop.vy += GRAVITY * dt;
+  drop.y += drop.vy * dt;
+  if (drop.y < FLOOR - R) return;
+  drop.y = FLOOR - R;
+  drop.landed = true;
+}
+
+function slideTo(item, target, distance) {
+  const delta = target - item.x;
+  if (Math.abs(delta) <= distance) {
+    item.x = target;
+    return true;
+  }
+  item.x += Math.sign(delta) * distance;
+  return false;
 }
 
 export function step(state, dt, rng = Math.random) {
@@ -239,13 +261,10 @@ export function step(state, dt, rng = Math.random) {
   const distance = dt * SPEED;
   const grid = buildGrid(state);
   for (const ball of state.balls) {
-    if (ball.landed) {
-      const delta = state.firstLandX - ball.x;
-      ball.x += Math.sign(delta) * Math.min(Math.abs(delta), distance);
-    } else {
-      moveBall(state, grid, ball, distance, events);
-    }
+    if (ball.landed) slideTo(ball, state.firstLandX, distance);
+    else moveBall(state, grid, ball, distance, events);
   }
+  for (const drop of state.drops) fall(drop, dt);
   state.launchTimer += dt;
   while (state.toLaunch > 0 && state.launchTimer >= INTERVAL) {
     state.launchTimer -= INTERVAL;
@@ -254,6 +273,11 @@ export function step(state, dt, rng = Math.random) {
     state.balls.push(ball);
     moveBall(state, grid, ball, state.launchTimer * SPEED, events);
   }
-  if (state.toLaunch === 0 && state.balls.every((ball) => ball.landed)) endTurn(state, rng, events);
+  if (state.toLaunch > 0 || !state.balls.every((ball) => ball.landed)) return events;
+  if (!state.drops.every((drop) => drop.landed)) return events;
+  // Все вернулись — шары из колец катятся к первому упавшему, и только потом ход заканчивается.
+  let gathered = state.balls.every((ball) => ball.x === state.firstLandX);
+  for (const drop of state.drops) if (!slideTo(drop, state.firstLandX, distance)) gathered = false;
+  if (gathered) endTurn(state, rng, events);
   return events;
 }
