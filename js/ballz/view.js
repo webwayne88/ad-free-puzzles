@@ -1,4 +1,4 @@
-import { COLS, FLOOR, GAP, HEIGHT, R, RING_R, aimEnd, clampAim, launch, recall, step } from './engine.js';
+import { COLS, FLOOR, GAP, HEIGHT, R, RING_R, aimEnd, clampAim, launch, step } from './engine.js';
 import { clearGame, loadBest, newGame, saveBest, saveGame } from './session.js';
 import { icon } from '../icons.js';
 import { chooseTheme } from '../settings.js';
@@ -9,7 +9,8 @@ const FONT = "Roboto, system-ui, -apple-system, 'Segoe UI', sans-serif";
 const SHIFT_MS = 240;
 const FLASH_MS = 90;
 const PARTICLE_MS = 450;
-const RECALL_AFTER_S = 1.5;
+const BOOST_AFTER_S = 1.5;
+const BOOST_SPEED = 4;
 const DRAG_THRESHOLD_PX = 14;
 const AIM_DOT_STEP = 0.34;
 const KEY_TURN = (2 * Math.PI) / 180;
@@ -35,7 +36,7 @@ const SCREEN_HTML = `
       <canvas class="bz-canvas" role="img" aria-label="Игровое поле"></canvas>
     </section>
     <div class="bz-bottom">
-      <button type="button" class="btn bz-recall" data-act="recall" hidden>${icon('down', 'icon icon-sm')}<span>Вернуть шары</span></button>
+      <button type="button" class="btn bz-boost" data-act="boost" hidden>${icon('forward', 'icon icon-sm')}<span>Ускорить ×4</span></button>
       <p class="bz-hint" hidden>Потяни вниз и отпусти</p>
     </div>
   </main>`;
@@ -54,7 +55,8 @@ function easeOut(t) {
   return 1 - (1 - t) ** 3;
 }
 
-function speedFor(seconds) {
+function speedFor(seconds, boosted) {
+  if (boosted) return BOOST_SPEED;
   if (seconds < 3) return 1;
   return seconds < 6 ? 1.7 : 2.6;
 }
@@ -233,9 +235,9 @@ function frame(now) {
   c.last = now;
   if (c.state.phase === 'fly' && !c.paused) {
     c.turnSeconds += dt;
-    handleEvents(c, step(c.state, dt * speedFor(c.turnSeconds)), now);
+    handleEvents(c, step(c.state, dt * speedFor(c.turnSeconds, c.boosted)), now);
   }
-  c.els.recall.hidden = !(c.state.phase === 'fly' && c.turnSeconds > RECALL_AFTER_S);
+  c.els.boost.hidden = !(c.state.phase === 'fly' && c.turnSeconds > BOOST_AFTER_S && !c.boosted);
   draw(c, now);
 }
 
@@ -243,6 +245,7 @@ function fire(c) {
   if (!launch(c.state, c.aim)) return;
   c.aim = null;
   c.turnSeconds = 0;
+  c.boosted = false;
   c.els.hint.hidden = true;
 }
 
@@ -277,7 +280,7 @@ function onKeyDown(event) {
   if (!c || isOverlayOpen() || event.ctrlKey || event.metaKey || event.altKey) return;
   const key = event.key;
   if (key === 'Escape' || key === 'p' || key === 'з') openPause(c);
-  else if (key === 'ArrowDown' && c.state.phase === 'fly') recall(c.state);
+  else if (key === 'ArrowDown' && c.state.phase === 'fly') c.boosted = true;
   else if ((key === 'ArrowLeft' || key === 'ArrowRight') && c.state.phase === 'aim') {
     const delta = key === 'ArrowLeft' ? -KEY_TURN : KEY_TURN;
     c.keyAngle = Math.min(KEY_MAX_ANGLE, Math.max(-KEY_MAX_ANGLE, c.keyAngle + delta));
@@ -373,7 +376,7 @@ export function mountBallz(root, state, { onExit }) {
       score: screen.querySelector('.bz-score'),
       best: screen.querySelector('.bz-best'),
       balls: screen.querySelector('.bz-balls'),
-      recall: screen.querySelector('.bz-recall'),
+      boost: screen.querySelector('.bz-boost'),
       hint: screen.querySelector('.bz-hint'),
     },
     g: null,
@@ -387,6 +390,7 @@ export function mountBallz(root, state, { onExit }) {
     keyAngle: 0,
     paused: false,
     turnSeconds: 0,
+    boosted: false,
     shiftStart: now,
     last: now,
     best: loadBest(),
@@ -399,7 +403,9 @@ export function mountBallz(root, state, { onExit }) {
   screen.querySelector('[data-act="back"]').addEventListener('click', () => c.onExit());
   screen.querySelector('[data-act="theme"]').addEventListener('click', () => openTheme(c));
   screen.querySelector('[data-act="pause"]').addEventListener('click', () => openPause(c));
-  c.els.recall.addEventListener('click', () => recall(c.state));
+  c.els.boost.addEventListener('click', () => {
+    c.boosted = true;
+  });
   screen.addEventListener('pointerdown', onPointerDown);
   screen.addEventListener('pointermove', onPointerMove);
   screen.addEventListener('pointerup', onPointerUp);

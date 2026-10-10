@@ -232,14 +232,6 @@ export function launch(state, dir) {
   return true;
 }
 
-// Досрочно завершить ход: все шары падают, ещё не вылетевшие остаются у точки запуска.
-export function recall(state) {
-  if (state.phase !== 'fly') return;
-  state.toLaunch = 0;
-  if (state.firstLandX === null) state.firstLandX = state.launchX;
-  for (const ball of state.balls) if (!ball.landed) land(state, ball);
-}
-
 export function step(state, dt, rng = Math.random) {
   const events = [];
   if (state.phase !== 'fly') return events;

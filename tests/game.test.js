@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { PEERS, parseGrid, solve } from '../js/sudoku/engine.js';
 import {
   MISTAKE_LIMIT,
+  candidates,
   createGame,
   erase,
   inputDigit,
@@ -10,6 +11,7 @@ import {
   restart,
   secondChance,
   select,
+  toggleCandidates,
   toggleNotesMode,
   undo,
   useHint,
@@ -63,8 +65,8 @@ test('второй шанс откатывает роковой ход', () => {
 
 test('верная цифра снимает такие же пометки у соседей и не меняется после', () => {
   const game = newGame();
-  const peer = PEERS[2].find((p) => !PUZZLE[p]);
   const d = SOLUTION[2];
+  const peer = PEERS[2].find((p) => !PUZZLE[p] && PEERS[p].every((q) => PUZZLE[q] !== d));
   toggleNotesMode(game);
   select(game, peer);
   inputDigit(game, d, SETTINGS);
@@ -130,4 +132,40 @@ test('рестарт возвращает исходное поле', () => {
   assert.deepEqual(game.values, PUZZLE);
   assert.equal(game.mistakes, 0);
   assert.equal(game.history.length, 0);
+});
+
+test('в черновике нельзя пометить цифру, которая уже есть у соседей', () => {
+  const game = newGame();
+  toggleNotesMode(game);
+  select(game, 2);
+  const event = inputDigit(game, 5, SETTINGS);
+  assert.equal(event.type, 'note-blocked');
+  assert.deepEqual(event.conflicts, [0]);
+  assert.equal(game.notes[2], 0);
+  assert.equal(game.history.length, 0);
+  assert.equal(inputDigit(game, SOLUTION[2], SETTINGS).type, 'note');
+});
+
+test('уже стоящую пометку можно снять, даже если цифра теперь конфликтует', () => {
+  const game = newGame();
+  game.notes[2] = 1 << 5;
+  toggleNotesMode(game);
+  select(game, 2);
+  assert.equal(inputDigit(game, 5, SETTINGS).type, 'note');
+  assert.equal(game.notes[2], 0);
+});
+
+test('варианты: все возможные цифры клетки, ручные пометки не трогаются', () => {
+  const game = newGame();
+  const mask = candidates(game, 2);
+  assert.ok(mask & (1 << SOLUTION[2]));
+  assert.equal(mask & (1 << 5), 0);
+  assert.equal(candidates(game, 0), 0);
+  game.notes[2] = 1 << 4;
+  toggleCandidates(game);
+  toggleNotesMode(game);
+  select(game, 2);
+  assert.equal(inputDigit(game, 1, SETTINGS), null);
+  toggleCandidates(game);
+  assert.equal(game.notes[2], 1 << 4);
 });

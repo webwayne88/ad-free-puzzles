@@ -3,6 +3,7 @@ import { PEERS, UNITS, UNITS_OF, findHint } from './engine.js';
 export const MISTAKE_LIMIT = 3;
 export const HINTS_PER_GAME = 3;
 const HISTORY_LIMIT = 100;
+const ALL_DIGITS = 0b1111111110;
 
 export function createGame(puzzle, solution, difficulty) {
   return {
@@ -16,6 +17,7 @@ export function createGame(puzzle, solution, difficulty) {
     elapsed: 0,
     selected: puzzle.findIndex((v) => v === 0),
     notesMode: false,
+    showCandidates: false,
     status: 'playing',
     history: [],
   };
@@ -31,6 +33,19 @@ export function isLocked(game, i) {
 
 export function isWrong(game, i) {
   return game.values[i] !== 0 && game.values[i] !== game.solution[i];
+}
+
+// Цифры, которые уже стоят в строке, столбце или блоке клетки, — их нельзя пометить.
+export function noteConflicts(game, i, d) {
+  return PEERS[i].filter((p) => game.values[p] === d);
+}
+
+// Все цифры, которые ещё можно поставить в пустую клетку, по видимым значениям на поле.
+export function candidates(game, i) {
+  if (game.values[i]) return 0;
+  let used = 0;
+  for (const p of PEERS[i]) if (game.values[p]) used |= 1 << game.values[p];
+  return ALL_DIGITS & ~used;
 }
 
 export function remainingCounts(game) {
@@ -82,11 +97,18 @@ export function toggleNotesMode(game) {
   game.notesMode = !game.notesMode;
 }
 
+export function toggleCandidates(game) {
+  game.showCandidates = !game.showCandidates;
+}
+
 export function inputDigit(game, d, settings) {
   const i = game.selected;
   if (game.status !== 'playing' || i < 0 || isLocked(game, i)) return null;
   if (game.notesMode) {
-    if (game.values[i]) return null;
+    if (game.values[i] || game.showCandidates) return null;
+    const adding = !(game.notes[i] & (1 << d));
+    const conflicts = adding ? noteConflicts(game, i, d) : [];
+    if (conflicts.length) return { type: 'note-blocked', cell: i, digit: d, conflicts };
     pushHistory(game);
     game.notes[i] ^= 1 << d;
     return { type: 'note', cell: i };

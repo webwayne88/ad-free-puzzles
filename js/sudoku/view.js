@@ -1,6 +1,7 @@
 import { BOX_OF, COL_OF, PEERS, ROW_OF, UNITS } from './engine.js';
 import {
   MISTAKE_LIMIT,
+  candidates,
   erase,
   inputDigit,
   isGiven,
@@ -9,6 +10,7 @@ import {
   restart,
   secondChance,
   select,
+  toggleCandidates,
   toggleNotesMode,
   undo,
   useHint,
@@ -57,6 +59,9 @@ const SCREEN_HTML = `
         </button>
         <button type="button" class="action" data-act="notes" aria-pressed="false">
           <span class="action-icon">${icon('pencil')}<span class="badge badge-notes"></span></span><span class="action-label">Черновик</span>
+        </button>
+        <button type="button" class="action" data-act="candidates" aria-pressed="false">
+          <span class="action-icon">${icon('dots')}<span class="badge badge-notes badge-candidates"></span></span><span class="action-label">Варианты</span>
         </button>
         <button type="button" class="action" data-act="hint">
           <span class="action-icon">${icon('bulb')}<span class="badge badge-hint"></span></span><span class="action-label">Подсказка</span>
@@ -155,6 +160,8 @@ function buildDom(c) {
     erase: screen.querySelector('[data-act="erase"]'),
     notes: screen.querySelector('[data-act="notes"]'),
     notesBadge: screen.querySelector('.badge-notes'),
+    candidates: screen.querySelector('[data-act="candidates"]'),
+    candidatesBadge: screen.querySelector('.badge-candidates'),
     hint: screen.querySelector('[data-act="hint"]'),
     hintBadge: screen.querySelector('.badge-hint'),
   };
@@ -214,8 +221,9 @@ function renderBoard(c) {
     cell.classList.toggle('has-value', Boolean(value));
     cell.firstChild.textContent = value ? String(value) : '';
     const notes = cell.lastChild.children;
+    const noteMask = game.showCandidates ? candidates(game, i) : game.notes[i];
     for (let d = 1; d <= 9; d++) {
-      const on = !value && Boolean(game.notes[i] & (1 << d));
+      const on = !value && Boolean(noteMask & (1 << d));
       notes[d - 1].classList.toggle('on', on);
       notes[d - 1].classList.toggle('match', on && d === selValue);
     }
@@ -228,19 +236,28 @@ function renderControls(c) {
   const { game } = c;
   const playing = game.status === 'playing' && !c.paused;
   const counts = remainingCounts(game);
-  c.els.numpad.classList.toggle('notes-mode', game.notesMode);
+  const sel = game.selected;
+  const noting = game.notesMode && !game.showCandidates;
+  // В черновике подсвечиваем красным цифры, которые нельзя пометить в выбранной клетке.
+  const allowed = noting && sel >= 0 ? candidates(game, sel) | game.notes[sel] : ~0;
+  c.els.numpad.classList.toggle('notes-mode', noting);
   for (let d = 1; d <= 9; d++) {
     const button = c.els.nums[d - 1];
     button.lastChild.textContent = String(counts[d]);
     button.classList.toggle('is-done', counts[d] === 0);
+    button.classList.toggle('is-blocked', !(allowed & (1 << d)));
     button.disabled = counts[d] === 0 || !playing;
   }
   c.els.undo.disabled = !playing || game.history.length === 0;
   c.els.erase.disabled = !playing;
-  c.els.notes.disabled = !playing;
-  c.els.notes.setAttribute('aria-pressed', String(game.notesMode));
-  c.els.notes.classList.toggle('is-on', game.notesMode);
-  c.els.notesBadge.textContent = game.notesMode ? 'ВКЛ' : 'ВЫКЛ';
+  c.els.notes.disabled = !playing || game.showCandidates;
+  c.els.notes.setAttribute('aria-pressed', String(noting));
+  c.els.notes.classList.toggle('is-on', noting);
+  c.els.notesBadge.textContent = noting ? 'ВКЛ' : 'ВЫКЛ';
+  c.els.candidates.disabled = !playing;
+  c.els.candidates.setAttribute('aria-pressed', String(Boolean(game.showCandidates)));
+  c.els.candidates.classList.toggle('is-on', Boolean(game.showCandidates));
+  c.els.candidatesBadge.textContent = game.showCandidates ? 'ВКЛ' : 'ВЫКЛ';
   c.els.hint.disabled = !playing || game.hintsLeft === 0;
   c.els.hintBadge.textContent = String(game.hintsLeft);
 }
@@ -280,6 +297,11 @@ function playEvent(c, event) {
   const value = c.els.cells[event.cell].firstChild;
   if (event.type === 'placed' || event.type === 'won') animate(value, 'pop', 220);
   if (event.type === 'mistake') animate(value, 'shake', 400);
+  if (event.type === 'note-blocked') {
+    animate(c.els.cells[event.cell].lastChild.children[event.digit - 1], 'note-blocked', 650);
+    animate(c.els.nums[event.digit - 1], 'shake', 400);
+    for (const i of event.conflicts) animate(c.els.cells[i], 'flash-error', 650);
+  }
   if (event.type === 'placed') for (const u of event.units) wave(c, UNITS[u], event.cell);
 }
 
@@ -308,8 +330,9 @@ function act(c, name) {
   if (name === 'undo') return apply(c, undo(c.game));
   if (name === 'erase') return apply(c, erase(c.game));
   if (name === 'hint') return apply(c, useHint(c.game, c.settings));
-  if (name === 'notes') {
-    toggleNotesMode(c.game);
+  if (name === 'notes' || name === 'candidates') {
+    if (name === 'notes') toggleNotesMode(c.game);
+    else toggleCandidates(c.game);
     persist(c);
     render(c);
   }
@@ -360,6 +383,7 @@ function onKeyDown(event) {
   else if (ARROWS[key]) moveSelection(c, ...ARROWS[key]);
   else if (key === 'n' || key === 'т') act(c, 'notes');
   else if (key === 'h' || key === 'р') act(c, 'hint');
+  else if (key === 'a' || key === 'ф') act(c, 'candidates');
   else return;
   event.preventDefault();
 }

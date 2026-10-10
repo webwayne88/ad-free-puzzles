@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { COLS, FLOOR, R, ROWS, clampAim, aimEnd, createGame, launch, recall, restore, snapshot, step } from '../js/ballz/engine.js';
+import { COLS, FLOOR, R, ROWS, clampAim, aimEnd, createGame, launch, restore, snapshot, step } from '../js/ballz/engine.js';
 
 function seeded(seed) {
   let a = seed >>> 0;
@@ -85,16 +85,6 @@ test('блок на последнем ряду после хода — коне
   playTurn(state, seeded(6));
   assert.equal(state.phase, 'over');
   assert.equal(state.level, 5);
-});
-
-test('recall завершает ход, даже если шары ещё летят', () => {
-  const state = emptyGame({ ballCount: 30 });
-  launch(state, clampAim(0.3, -1));
-  step(state, 0.2, seeded(7));
-  recall(state);
-  step(state, 1 / 120, seeded(7));
-  assert.equal(state.phase, 'aim');
-  assert.equal(state.level, 6);
 });
 
 test('прицел останавливается на первом блоке', () => {

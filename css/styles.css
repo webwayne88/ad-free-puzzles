@@ -536,6 +536,35 @@ button:disabled {
   font-weight: 700;
 }
 
+.note.note-blocked {
+  color: var(--error);
+  font-weight: 700;
+  animation: note-blocked 0.65s ease both;
+}
+
+@keyframes note-blocked {
+  0% {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  25% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+  70% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.cell.flash-error::after {
+  background: color-mix(in srgb, var(--error) 35%, transparent);
+  animation: wave 0.65s ease both;
+}
+
 .board.is-paused .cell {
   background: var(--surface);
 }
@@ -599,7 +628,7 @@ button:disabled {
 
 .actions {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
 }
 
 .action {
@@ -627,7 +656,7 @@ button:disabled {
 }
 
 .action-label {
-  font-size: min(15px, 3.6vw);
+  font-size: min(14px, 3.2vw);
   color: var(--muted);
   transition: color 0.15s ease;
 }
@@ -688,6 +717,14 @@ button:disabled {
 
 .num:disabled {
   opacity: 0.4;
+}
+
+.num.is-blocked {
+  color: var(--error);
+}
+
+.num.shake {
+  animation: shake 0.4s ease both;
 }
 
 .num.is-done {
@@ -818,7 +855,7 @@ button:disabled {
   justify-content: center;
 }
 
-.bz-recall {
+.bz-boost {
   display: inline-flex;
   align-items: center;
   gap: 8px;
