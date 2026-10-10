@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { COLS, FLOOR, R, ROWS, clampAim, aimEnd, createGame, dragToAim, inDanger, launch, restore, snapshot, step } from '../js/ricochet/engine.js';
+import { COLS, FLOOR, R, ROWS, clampAim, aimEnd, createGame, dragToAim, inDanger, pointAim, rowPlan, launch, restore, snapshot, step } from '../js/ricochet/engine.js';
 
 function seeded(seed) {
   let a = seed >>> 0;
@@ -148,11 +148,52 @@ test('попадание точно в стык двух блоков бьёт �
   assert.ok(Math.abs(state.launchX - 4) < 1e-6, `шар ушёл вбок: ${state.launchX}`);
 });
 
-test('прицел: рогатка по умолчанию, при инверсии — куда ведёшь палец', () => {
-  // Палец сместился вниз и влево: экранные dx = −30, dy = +80.
-  const slingshot = dragToAim(-30, 80, false);
-  assert.ok(slingshot.y < 0 && slingshot.x > 0, 'рогатка: вверх и вправо');
-  assert.equal(dragToAim(-30, 80, true), null, 'инверсия: вниз — отмена');
-  const follow = dragToAim(-30, -80, true);
-  assert.ok(follow.y < 0 && follow.x < 0, 'инверсия: вверх и влево, за пальцем');
+test('рогатка: тянешь вниз-влево — шар летит вверх-вправо', () => {
+  const aim = dragToAim(-30, 80);
+  assert.ok(aim.y < 0 && aim.x > 0);
+  assert.equal(dragToAim(0, -80), null, 'тянешь вверх — отмена');
+});
+
+test('прицел за пальцем: линия идёт от шара к точке касания, ниже шара — отмена', () => {
+  const state = emptyGame({ launchX: 3.5 });
+  const aim = pointAim(state, 5.5, FLOOR - R - 2);
+  assert.ok(Math.abs(aim.x - Math.SQRT1_2) < 1e-9 && Math.abs(aim.y + Math.SQRT1_2) < 1e-9, 'ровно на 45° вверх-вправо');
+  assert.equal(pointAim(state, 2, FLOOR), null);
+});
+
+test('ряд: не больше 5 блоков, чаще 2–4; на тесном поле ряды беднеют', () => {
+  const rng = seeded(13);
+  const counts = [];
+  for (let k = 0; k < 2000; k++) counts.push(rowPlan(40, 0.2, rng).hps.length);
+  assert.ok(Math.max(...counts) <= 5 && Math.min(...counts) >= 1);
+  const average = counts.reduce((a, b) => a + b, 0) / counts.length;
+  assert.ok(average > 2.5 && average < 3.6, `в среднем ${average}`);
+  const crowded = Array.from({ length: 500 }, () => rowPlan(40, 0.65, rng).hps.length);
+  assert.ok(Math.max(...crowded) <= 3, 'при заполнении больше 60% — минус два блока');
+});
+
+test('сложность растёт числами: удвоенных блоков с уровнем больше', () => {
+  const rng = seeded(14);
+  const share = (level) => {
+    const hps = Array.from({ length: 1000 }, () => rowPlan(level, 0, rng).hps).flat();
+    assert.ok(hps.every((hp) => hp === level || hp === level * 2));
+    return hps.filter((hp) => hp === level * 2).length / hps.length;
+  };
+  assert.equal(share(5), 0);
+  const early = share(12);
+  const late = share(50);
+  assert.ok(early > 0.08 && early < 0.25 && late > 0.38 && late < 0.52, `${early} → ${late}`);
+});
+
+test('поле не забивается: в долгой партии свободно больше половины клеток', () => {
+  const rng = seeded(15);
+  const state = createGame(rng);
+  state.ballCount = 200;
+  let worst = 0;
+  for (let turn = 0; turn < 60 && state.phase !== 'over'; turn++) {
+    launch(state, clampAim(rng() * 2 - 1, -1));
+    playTurn(state, rng, 120);
+    worst = Math.max(worst, state.blocks.length / (COLS * (ROWS - 1)));
+  }
+  assert.ok(worst < 0.62, `максимальная заполненность ${worst}`);
 });

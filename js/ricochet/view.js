@@ -1,4 +1,4 @@
-import { COLS, FLOOR, GAP, HEIGHT, R, RING_R, aimEnd, clampAim, dragToAim, inDanger, launch, step } from './engine.js';
+import { COLS, FLOOR, GAP, HEIGHT, R, RING_R, aimEnd, clampAim, dragToAim, inDanger, launch, pointAim, step } from './engine.js';
 import { clearGame, loadBest, newGame, saveBest, saveGame } from './session.js';
 import { icon } from '../icons.js';
 import { chooseTheme, loadSettings, saveSettings } from '../settings.js';
@@ -256,20 +256,37 @@ function fire(c) {
 
 // ---------- Ввод: оттянуть вниз и отпустить, как рогатку ----------
 
+// Точка касания в координатах поля (в клетках).
+function fieldPoint(c, event) {
+  const rect = c.els.canvas.getBoundingClientRect();
+  return { x: (event.clientX - rect.left) / c.unit, y: (event.clientY - rect.top) / c.unit };
+}
+
+// Рогатка — направление от смещения пальца; «за пальцем» — линия от шара к точке под пальцем сразу при касании.
+function updateAim(c, event) {
+  if (c.followAim) {
+    const point = fieldPoint(c, event);
+    c.aim = pointAim(c.state, point.x, point.y);
+    return;
+  }
+  const moveX = event.clientX - c.drag.x0;
+  const moveY = event.clientY - c.drag.y0;
+  c.aim = Math.hypot(moveX, moveY) > DRAG_THRESHOLD_PX ? dragToAim(moveX, moveY) : null;
+}
+
 function onPointerDown(event) {
   const c = ctx;
   if (!c || c.paused || c.state.phase !== 'aim' || event.target.closest('button')) return;
   c.drag = { x0: event.clientX, y0: event.clientY, id: event.pointerId };
   c.aim = null;
   c.els.screen.setPointerCapture(event.pointerId);
+  updateAim(c, event);
 }
 
 function onPointerMove(event) {
   const c = ctx;
   if (!c || !c.drag || event.pointerId !== c.drag.id) return;
-  const moveX = event.clientX - c.drag.x0;
-  const moveY = event.clientY - c.drag.y0;
-  c.aim = Math.hypot(moveX, moveY) > DRAG_THRESHOLD_PX ? dragToAim(moveX, moveY, c.invertAim) : null;
+  updateAim(c, event);
 }
 
 function onPointerUp(event) {
@@ -331,7 +348,7 @@ function openPause(c) {
 }
 
 function hintText(c) {
-  return c.invertAim ? 'Веди пальцем туда, куда стрелять, и отпусти' : 'Потяни вниз и отпусти';
+  return c.followAim ? 'Коснись поля и отпусти — выстрел' : 'Потяни вниз и отпусти';
 }
 
 function openSettings(c) {
@@ -340,10 +357,10 @@ function openSettings(c) {
   c.aim = null;
   const list = switchList([
     {
-      label: 'Инверсия прицела: шар летит туда, куда ведёшь палец',
-      checked: c.invertAim,
+      label: 'Прицел за пальцем: линия идёт от шара к точке касания',
+      checked: c.followAim,
       onChange: (value) => {
-        c.invertAim = value;
+        c.followAim = value;
         const settings = loadSettings();
         settings.ricochetInvertAim = value;
         saveSettings(settings);
@@ -429,7 +446,7 @@ export function mountRicochet(root, state, { onExit }) {
   };
   const c = ctx;
   c.g = c.els.canvas.getContext('2d');
-  c.invertAim = loadSettings().ricochetInvertAim;
+  c.followAim = loadSettings().ricochetInvertAim;
   c.els.hint.textContent = hintText(c);
   c.els.hint.hidden = state.level > 1;
   screen.querySelector('[data-act="back"]').addEventListener('click', () => c.onExit());

@@ -23,21 +23,41 @@ function shuffle(items, rng) {
   return out;
 }
 
-// Ранние уровни — редкие ряды, дальше плотнее; одна клетка всегда остаётся под кольцо.
-function blocksInRow(level, rng) {
-  const min = level < 10 ? 1 : 2;
-  const max = level < 5 ? 3 : level < 15 ? 5 : 6;
-  return min + Math.floor(rng() * (max - min + 1));
+// Сколько блоков в ряду после 5-го уровня: чаще 2–4, шестой не бывает никогда.
+const ROW_WEIGHTS = [
+  [1, 0.05],
+  [2, 0.28],
+  [3, 0.35],
+  [4, 0.22],
+  [5, 0.1],
+];
+
+function weightedCount(rng) {
+  let roll = rng();
+  for (const [count, weight] of ROW_WEIGHTS) {
+    roll -= weight;
+    if (roll < 0) return count;
+  }
+  return ROW_WEIGHTS[ROW_WEIGHTS.length - 1][0];
+}
+
+// Сложность растёт числами, а не плотностью: доля удвоенных блоков с 8-го уровня идёт от 10% до 45%.
+// На тесном поле новый ряд беднее, чтобы оставалось место для отскоков. occupancy — доля занятых клеток.
+export function rowPlan(level, occupancy, rng) {
+  let count = level < 5 ? 1 + Math.floor(rng() * 3) : weightedCount(rng);
+  if (occupancy > 0.6) count -= 2;
+  else if (occupancy > 0.45) count -= 1;
+  count = Math.max(1, count);
+  const doubleChance = level < 8 ? 0 : Math.min(0.45, 0.1 + (level - 8) * 0.0085);
+  const hps = Array.from({ length: count }, () => level * (rng() < doubleChance ? 2 : 1));
+  return { hps };
 }
 
 function spawnRow(state, rng) {
   const cols = shuffle([0, 1, 2, 3, 4, 5, 6], rng);
-  const count = blocksInRow(state.level, rng);
-  for (let k = 0; k < count; k++) {
-    const double = state.level >= 10 && rng() < 0.3;
-    state.blocks.push({ c: cols[k], r: 1, hp: state.level * (double ? 2 : 1) });
-  }
-  state.rings.push({ c: cols[count], r: 1 });
+  const { hps } = rowPlan(state.level, state.blocks.length / (COLS * (ROWS - 1)), rng);
+  hps.forEach((hp, k) => state.blocks.push({ c: cols[k], r: 1, hp }));
+  state.rings.push({ c: cols[hps.length], r: 1 });
 }
 
 export function createGame(rng = Math.random) {
@@ -83,10 +103,14 @@ export function clampAim(dx, dy) {
   return { x, y };
 }
 
-// Смещение пальца на экране (moveX, moveY) → направление выстрела.
-// По умолчанию рогатка: тянешь вниз — шар летит вверх. При инверсии шар летит туда, куда ведёшь палец.
-export function dragToAim(moveX, moveY, inverted) {
-  return inverted ? clampAim(moveX, moveY) : clampAim(-moveX, -moveY);
+// Рогатка: палец сместился на (moveX, moveY) от точки касания — шар летит в противоположную сторону.
+export function dragToAim(moveX, moveY) {
+  return clampAim(-moveX, -moveY);
+}
+
+// Прицел за пальцем: направление от шара к точке под пальцем (координаты поля). Ниже шара — отмена.
+export function pointAim(state, x, y) {
+  return clampAim(x - state.launchX, y - (FLOOR - R));
 }
 
 function buildGrid(state) {
