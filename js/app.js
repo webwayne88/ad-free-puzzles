@@ -1,3 +1,4 @@
+import { mountAnalyst, unmountAnalyst } from './analyst/view.js';
 import { renderHome } from './home.js';
 import { mountHues, unmountHues } from './hues/view.js';
 import { loadGame as loadRicochetGame, newGame as newRicochetGame } from './ricochet/session.js';
@@ -29,8 +30,14 @@ function route() {
   unmountSudoku();
   unmountRicochet();
   unmountHues();
+  unmountAnalyst();
   closeAllOverlays();
   root.replaceChildren();
+  const analyst = location.hash.match(/^#\/analyst\/(corr|metrics|ab)$/);
+  if (analyst) {
+    mountAnalyst(root, analyst[1], { onExit: exitToHome });
+    return;
+  }
   if (location.hash === '#/hues/memory' || location.hash === '#/hues/palette') {
     mountHues(root, location.hash.slice('#/hues/'.length), { onExit: exitToHome });
     return;

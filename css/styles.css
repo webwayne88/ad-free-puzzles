@@ -1164,6 +1164,231 @@ button:disabled {
   box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.1);
 }
 
+/* ---------- Аналитик ---------- */
+
+.analyst {
+  --board: max(220px, min(calc(100vw - 40px), calc((var(--vh) - 470px) / 0.75), 560px));
+  align-items: center;
+}
+
+@media (min-width: 900px) and (min-aspect-ratio: 4/3) {
+  .analyst {
+    --board: min(calc((var(--vh) - 230px) / 0.75), calc(100vw - 600px), 760px);
+  }
+}
+
+.an-stage {
+  width: var(--board);
+}
+
+.an-stage-corr {
+  height: calc(var(--board) * 0.75);
+}
+
+.an-plot {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.an-axis {
+  fill: none;
+  stroke: var(--line);
+  stroke-width: 0.4;
+}
+
+.an-points circle {
+  fill: var(--accent);
+  fill-opacity: 0.6;
+}
+
+.an-fit {
+  stroke: var(--error);
+  stroke-width: 0.6;
+  stroke-dasharray: 2 1.2;
+}
+
+.an-axis-title {
+  font-family: var(--font);
+  font-size: 2.8px;
+  fill: var(--muted);
+}
+
+.an-stage-metrics,
+.an-stage-ab {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 16px;
+  min-height: calc(var(--board) * 0.5);
+  padding: 16px 12px;
+  border-radius: 10px;
+  background: var(--bg);
+}
+
+.an-question {
+  margin: 0;
+  font-size: 19px;
+  line-height: 1.4;
+}
+
+.an-answer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 56px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: inset 0 0 0 2px var(--hl-selected);
+}
+
+.an-sign {
+  width: 36px;
+  height: 36px;
+  flex: none;
+  border-radius: 10px;
+  background: var(--hl-area);
+  font-size: 20px;
+}
+
+.an-sign:disabled {
+  opacity: 0.4;
+}
+
+.an-value {
+  flex: 1;
+  min-width: 0;
+  font-size: 28px;
+  font-variant-numeric: tabular-nums;
+}
+
+.an-value.is-placeholder {
+  font-size: 20px;
+  color: var(--muted);
+}
+
+.an-unit {
+  font-size: 17px;
+  color: var(--muted);
+}
+
+.an-numpad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.an-key {
+  height: 50px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: var(--hl-area);
+  font-size: 24px;
+  transition: transform 0.1s ease, background-color 0.15s ease;
+}
+
+.an-key:active {
+  transform: scale(0.95);
+}
+
+.an-choices {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  align-content: center;
+  gap: 8px;
+}
+
+.an-choice {
+  height: 56px;
+  padding: 0 6px;
+  font-size: min(15px, 3.8vw);
+  line-height: 1.15;
+  white-space: normal;
+}
+
+.an-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.an-table th {
+  padding: 0 8px 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
+  text-align: right;
+}
+
+.an-table td {
+  padding: 12px 8px;
+  border-top: 1px solid var(--line);
+  font-size: 17px;
+  text-align: right;
+  transition: background-color 0.2s ease;
+}
+
+.an-table th:first-child,
+.an-table td:first-child {
+  text-align: left;
+}
+
+.an-table tr.is-winner td {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  font-weight: 600;
+}
+
+.analyst .hu-panel {
+  min-height: 190px;
+}
+
+.analyst .hu-panel > * {
+  align-self: center;
+}
+
+.analyst .an-caption {
+  font-size: 13px;
+}
+
+.an-explain {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--muted);
+  text-align: center;
+}
+
+.an-track {
+  background: linear-gradient(
+    to right,
+    color-mix(in srgb, var(--error) 35%, var(--hl-area)),
+    var(--hl-area) 50%,
+    color-mix(in srgb, var(--accent) 35%, var(--hl-area))
+  );
+}
+
+.an-zero {
+  position: absolute;
+  top: 5px;
+  bottom: 5px;
+  left: 50%;
+  width: 2px;
+  background: var(--muted);
+  opacity: 0.5;
+  transform: translateX(-50%);
+}
+
+.an-thumb {
+  background: var(--accent);
+}
+
+.is-invisible {
+  visibility: hidden;
+}
+
 /* ---------- Шторки и диалоги ---------- */
 
 .overlay {

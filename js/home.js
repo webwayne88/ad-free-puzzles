@@ -1,10 +1,12 @@
+import { formatNumber, loadStats as loadAnalystStats } from './analyst/session.js';
+import { MODES as ANALYST_MODES } from './analyst/view.js';
 import { formatScore, loadStats as loadHuesStats } from './hues/session.js';
 import { icon } from './icons.js';
 import { loadBest as loadRicochetBest, loadGame as loadRicochetGame, newGame as newRicochetGame } from './ricochet/session.js';
 import { chooseTheme } from './settings.js';
 import { difficultyLabel, formatTime, loadGame, newGame } from './sudoku/session.js';
 import { chooseDifficulty } from './sudoku/view.js';
-import { el } from './ui.js';
+import { choiceList, el, openOverlay } from './ui.js';
 
 const HOME_HTML = `
   <header class="home-head">
@@ -96,10 +98,35 @@ function huesCard(onOpen) {
   });
 }
 
+function analystCard(onOpen) {
+  const stats = loadAnalystStats();
+  const options = ANALYST_MODES.map((mode) => ({
+    ...mode,
+    meta: stats[mode.value]?.best != null ? `рекорд ${formatNumber(stats[mode.value].best)}` : '',
+  }));
+  const played = options.filter((o) => o.meta);
+  const choose = () => {
+    let close = null;
+    const list = choiceList(options, {
+      onPick: (value) => {
+        close();
+        onOpen(`analyst/${value}`);
+      },
+    });
+    close = openOverlay({ title: 'Режим', body: list });
+  };
+  return gameCard({
+    logo: 'icons/analyst.svg',
+    name: 'Аналитик',
+    desc: played.length ? played.map((o) => `${o.short}: ${o.meta}`).join(', ') : 'Корреляции на реальных данных, метрики и A/B-тесты',
+    actions: [button('Играть', true, choose)],
+  });
+}
+
 export function renderHome(root, { onOpen }) {
   const screen = el('div', 'screen home');
   screen.innerHTML = HOME_HTML;
   screen.querySelector('[data-act="theme"]').addEventListener('click', () => chooseTheme());
-  screen.querySelector('.game-list').append(sudokuCard(onOpen), ricochetCard(onOpen), huesCard(onOpen));
+  screen.querySelector('.game-list').append(sudokuCard(onOpen), ricochetCard(onOpen), huesCard(onOpen), analystCard(onOpen));
   root.append(screen);
 }
