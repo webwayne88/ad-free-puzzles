@@ -1,0 +1,9 @@
+{
+  "name": "igroteka",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test",
+    "generate:sudoku": "node tools/generate-sudoku.js"
+  }
+}

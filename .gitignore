@@ -1,0 +1,15 @@
+node_modules/
+dist/
+
+.env
+.env.*
+!.env.example
+.DS_Store
+*.log
+.idea/
+.vscode/
+
+# Скриншоты-референсы чужих приложений
+*.jpg
+
+.playwright-mcp

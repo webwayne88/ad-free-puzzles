@@ -1,0 +1,7 @@
+.git
+.env
+tests
+tools
+*.jpg
+*.md
+.playwright-mcp
