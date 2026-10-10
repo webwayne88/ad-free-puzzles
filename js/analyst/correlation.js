@@ -51,6 +51,9 @@ function realRound(pair, swap, year) {
     fit: linearFit(points),
     xTitle: axisTitle(x),
     yTitle: axisTitle(y),
+    xLog: x.log,
+    yLog: y.log,
+    ticks: true,
     lesson: realLesson(r),
     note: `${points.length} стран, около ${year} г. Данные: ${[...new Set([x.short, y.short])].join(', ')} через Our World in Data`,
   };
@@ -81,6 +84,9 @@ function syntheticRound(rng, kind) {
     fit: linearFit(points),
     xTitle: 'X',
     yTitle: 'Y',
+    xLog: false,
+    yLog: false,
+    ticks: false,
     lesson:
       kind === 'curve'
         ? 'Связь есть, но нелинейная: r измеряет только линейную и её почти не видит.'

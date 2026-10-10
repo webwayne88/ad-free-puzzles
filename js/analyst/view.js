@@ -13,6 +13,7 @@ export const MODES = [
 ];
 const MAX_INPUT = 10;
 const VERDICTS = { A: 'Победил A', none: 'Разницы нет', B: 'Победил B' };
+const VERDICTS_INLINE = { A: 'победил A', none: 'разницы нет', B: 'победил B' };
 const PLOT = { width: 100, height: 75, left: 9, right: 3, top: 3, bottom: 9 };
 
 let ctx = null;
@@ -39,6 +40,7 @@ const SCREEN_HTML = `
         <div class="hu-result an-result is-hidden">
           <div class="hu-score an-score"></div>
           <p class="hu-feedback an-feedback"></p>
+          <div class="an-scale"></div>
           <p class="an-explain"></p>
         </div>
       </div>
@@ -73,8 +75,52 @@ function formatPercent(fraction, digits = 1) {
 
 // ---------- Сцена: диаграмма, задача, таблица ----------
 
+// «Круглый» шаг шкалы: 1, 2 или 5 × 10^k.
+function niceStep(range, count) {
+  const raw = range / count;
+  const power = 10 ** Math.floor(Math.log10(raw));
+  const fraction = raw / power;
+  if (fraction < 1.5) return power;
+  if (fraction < 3) return 2 * power;
+  if (fraction < 7) return 5 * power;
+  return 10 * power;
+}
+
+function linearTicks(min, max) {
+  const step = niceStep(max - min, 4);
+  const ticks = [];
+  for (let t = Math.ceil(min / step) * step; t <= max + 1e-9; t += step) ticks.push(Math.round(t / step) * step);
+  return ticks;
+}
+
+// На лог-оси — степени десятки, а если их мало, то ещё 2 и 5 × 10^k.
+function logTicks(min, max) {
+  const ticks = [];
+  for (let k = Math.floor(min); k <= Math.ceil(max); k++) {
+    for (const m of [1, 2, 5]) {
+      const t = k + Math.log10(m);
+      if (t >= min && t <= max) ticks.push({ t, major: m === 1 });
+    }
+  }
+  const majors = ticks.filter((tick) => tick.major);
+  return (majors.length >= 3 ? majors : ticks).map((tick) => tick.t);
+}
+
+function compactNumber(value) {
+  if (Math.abs(value) >= 1e6) return `${formatNumber(value / 1e6, value % 1e6 ? 1 : 0)} млн`;
+  if (Math.abs(value) >= 1e3) return `${formatNumber(value / 1e3, value % 1e3 ? 1 : 0)} тыс`;
+  return value.toLocaleString('ru-RU', { maximumFractionDigits: 2 }).replace('-', '−');
+}
+
+function axisTicks(min, max, log) {
+  const ticks = log ? logTicks(min, max) : linearTicks(min, max);
+  return ticks.map((t) => ({ t, label: compactNumber(log ? 10 ** t : t) }));
+}
+
 function scatterSvg(round, reveal) {
-  const { width, height, left, right, top, bottom } = PLOT;
+  const { width, height, right, top } = PLOT;
+  const left = round.ticks ? 15 : 7;
+  const bottom = round.ticks ? 13 : 9;
   const xs = round.points.map((p) => p.x);
   const ys = round.points.map((p) => p.y);
   const xPad = (Math.max(...xs) - Math.min(...xs)) * 0.04;
@@ -85,18 +131,73 @@ function scatterSvg(round, reveal) {
   const y1 = Math.max(...ys) + yPad;
   const px = (x) => left + ((x - x0) / (x1 - x0)) * (width - left - right);
   const py = (y) => height - bottom - ((y - y0) / (y1 - y0)) * (height - top - bottom);
-  const dots = round.points.map((p) => `<circle cx="${px(p.x).toFixed(2)}" cy="${py(p.y).toFixed(2)}" r="0.9"/>`).join('');
+  let grid = '';
+  if (round.ticks) {
+    for (const tick of axisTicks(x0, x1, round.xLog)) {
+      const x = px(tick.t).toFixed(2);
+      grid += `<line class="an-grid" x1="${x}" y1="${top}" x2="${x}" y2="${height - bottom}"/>`;
+      grid += `<text class="an-tick" x="${x}" y="${height - bottom + 4.2}" text-anchor="middle">${tick.label}</text>`;
+    }
+    for (const tick of axisTicks(y0, y1, round.yLog)) {
+      const y = py(tick.t).toFixed(2);
+      grid += `<line class="an-grid" x1="${left}" y1="${y}" x2="${width - right}" y2="${y}"/>`;
+      grid += `<text class="an-tick" x="${left - 1.5}" y="${y}" dy="0.9" text-anchor="end">${tick.label}</text>`;
+    }
+  }
+  const dots = round.points.map((p) => `<circle cx="${px(p.x).toFixed(2)}" cy="${py(p.y).toFixed(2)}" r="0.85"/>`).join('');
   const fit = reveal
     ? `<line class="an-fit" clip-path="url(#an-clip)" x1="${px(x0)}" y1="${py(round.fit.intercept + round.fit.slope * x0)}" x2="${px(x1)}" y2="${py(round.fit.intercept + round.fit.slope * x1)}"/>`
     : '';
   return `<svg class="an-plot" viewBox="0 0 ${width} ${height}" role="img" aria-label="Диаграмма рассеяния: ${escapeText(round.yTitle)} и ${escapeText(round.xTitle)}">
     <defs><clipPath id="an-clip"><rect x="${left}" y="${top}" width="${width - left - right}" height="${height - top - bottom}"/></clipPath></defs>
+    ${grid}
     <path class="an-axis" d="M${left} ${top} V${height - bottom} H${width - right}"/>
     <g class="an-points">${dots}</g>
     ${fit}
-    <text class="an-axis-title" x="${(left + width - right) / 2}" y="${height - 3}" text-anchor="middle">${escapeText(round.xTitle)}</text>
-    <text class="an-axis-title" transform="translate(4.5 ${(top + height - bottom) / 2}) rotate(-90)" text-anchor="middle">${escapeText(round.yTitle)}</text>
+    <text class="an-axis-title" x="${(left + width - right) / 2}" y="${height - 1.2}" text-anchor="middle">${escapeText(round.xTitle)}</text>
+    <text class="an-axis-title" transform="translate(2.6 ${(top + height - bottom) / 2}) rotate(-90)" text-anchor="middle">${escapeText(round.yTitle)}</text>
   </svg>`;
+}
+
+// Разница B − A с 95% ДИ: если отрезок пересекает ноль, разница незначима.
+function ciSvg(test) {
+  const values = [test.ciLow, test.ciHigh, 0].map((v) => v * 100);
+  const span = Math.max(...values) - Math.min(...values) || 1;
+  const lo = Math.min(...values) - span * 0.15;
+  const hi = Math.max(...values) + span * 0.15;
+  const px = (v) => 6 + ((v * 100 - lo) / (hi - lo)) * 88;
+  const significant = test.winner !== 'none' ? 'is-significant' : '';
+  // Ноль подписан сверху, границы интервала снизу — так подписи не налезают друг на друга.
+  return `<svg class="an-ci ${significant}" viewBox="0 0 100 24" role="img" aria-label="Разница B − A и 95% доверительный интервал">
+    <text class="an-ci-label" x="${px(0)}" y="4" text-anchor="middle">0</text>
+    <line class="an-ci-zero" x1="${px(0)}" y1="6" x2="${px(0)}" y2="17"/>
+    <line class="an-ci-range" x1="${px(test.ciLow)}" y1="11.5" x2="${px(test.ciHigh)}" y2="11.5"/>
+    <line class="an-ci-range" x1="${px(test.ciLow)}" y1="9" x2="${px(test.ciLow)}" y2="14"/>
+    <line class="an-ci-range" x1="${px(test.ciHigh)}" y1="9" x2="${px(test.ciHigh)}" y2="14"/>
+    <circle class="an-ci-dot" cx="${px(test.diff)}" cy="11.5" r="1.8"/>
+    <text class="an-ci-label" x="${px(test.ciLow)}" y="22" text-anchor="middle">${formatNumber(test.ciLow * 100, 2)}</text>
+    <text class="an-ci-label" x="${px(test.ciHigh)}" y="22" text-anchor="middle">${formatNumber(test.ciHigh * 100, 2)}</text>
+  </svg>`;
+}
+
+// Шкала от −1 до 1 с метками «ты» и «r».
+function rScale(guess, r) {
+  const scale = el('div', 'an-rscale');
+  scale.append(el('span', 'an-rscale-zero'));
+  for (const [value, label, cls] of [
+    [guess, 'ты', 'is-guess'],
+    [r, 'r', 'is-truth'],
+  ]) {
+    const mark = el('span', `an-rscale-mark ${cls}`);
+    mark.style.left = `${((value + 1) / 2) * 100}%`;
+    mark.append(el('span', 'an-rscale-label', `${label} ${formatR(value)}`));
+    scale.append(mark);
+  }
+  const ends = el('div', 'an-rscale-ends');
+  ends.append(el('span', '', '−1'), el('span', '', '0'), el('span', '', '1'));
+  const wrap = el('div', 'an-rscale-wrap');
+  wrap.append(scale, ends);
+  return wrap;
 }
 
 function metricsStage(c, stage) {
@@ -131,6 +232,11 @@ function abStage(c, stage) {
   }
   table.append(body);
   stage.append(table);
+  if (!reveal) return;
+  const ci = el('div', 'an-ci-block');
+  ci.innerHTML = ciSvg(round.test);
+  ci.append(el('p', 'an-ci-caption', 'Разница B − A и 95% доверительный интервал, п.п.'));
+  stage.append(ci);
 }
 
 function renderStage(c) {
@@ -166,7 +272,7 @@ function buildInput(c) {
     return;
   }
   const choices = el('div', 'an-choices');
-  for (const choice of ['A', 'none', 'B']) {
+  for (const choice of ['A', 'B', 'none']) {
     const button = el('button', 'btn an-choice', VERDICTS[choice]);
     button.type = 'button';
     button.dataset.choice = choice;
@@ -196,7 +302,7 @@ function revealText(c) {
   const round = currentRound(c);
   const result = currentResult(c);
   if (c.game.mode === 'corr') {
-    return { feedback: `r = ${formatR(round.r)}, твой ответ ${formatR(result.answer)}`, explain: round.lesson };
+    return { feedback: `Ошибка ${formatR(Math.abs(result.answer - round.r))}`, explain: round.lesson };
   }
   if (c.game.mode === 'metrics') {
     let verdict = 'Мимо';
@@ -205,17 +311,17 @@ function revealText(c) {
     return { feedback: `${verdict}. Ответ: ${formatAnswer(round.answer)}${round.unit === '%' ? '' : ' '}${round.unit}`, explain: round.explain };
   }
   const t = round.test;
-  const p = t.pValue < 0.001 ? '< 0,001' : formatNumber(t.pValue, 3);
+  const p = t.pValue < 0.001 ? 'p < 0,001' : `p = ${formatNumber(t.pValue, 3)}`;
   const significance = t.pValue < 0.05 ? 'меньше 0,05: разница значима.' : 'больше 0,05: такую разницу легко получить случайно.';
   const lift = t.pA > 0 ? ` (${t.diff >= 0 ? '+' : '−'}${formatNumber(Math.abs(t.diff / t.pA) * 100, 0)}%)` : '';
-  let explain = `p = ${p} — ${significance} Разница B − A: ${formatNumber(t.diff * 100, 2)} п.п.${lift}, 95% ДИ от ${formatNumber(t.ciLow * 100, 2)} до ${formatNumber(t.ciHigh * 100, 2)} п.п.`;
+  let explain = `${p} — ${significance} Разница B − A: ${formatNumber(t.diff * 100, 2)} п.п.${lift}, 95% ДИ от ${formatNumber(t.ciLow * 100, 2)} до ${formatNumber(t.ciHigh * 100, 2)} п.п.`;
   if (t.winner === 'none') {
     explain += Number.isFinite(t.neededN)
       ? ` Чтобы надёжно поймать такую разницу, нужно около ${(Math.ceil(t.neededN / 100) * 100).toLocaleString('ru-RU')} посетителей в каждой группе.`
       : ' Конверсии совпадают.';
   }
   const correct = result.score === 10;
-  return { feedback: correct ? `Верно: ${VERDICTS[t.winner].toLowerCase()}` : `Неверно: ${VERDICTS[t.winner].toLowerCase()}`, explain };
+  return { feedback: correct ? `Верно: ${VERDICTS_INLINE[t.winner]}` : `Неверно, правильно: ${VERDICTS_INLINE[t.winner]}`, explain };
 }
 
 // ---------- Отрисовка ----------
@@ -249,6 +355,9 @@ function render(c) {
     els.score.innerHTML = `${formatNumber(currentResult(c).score)}<small> / 10</small>`;
     els.feedback.textContent = feedback;
     els.explain.textContent = explain;
+    els.explain.hidden = !explain;
+    els.scale.replaceChildren();
+    if (game.mode === 'corr') els.scale.append(rScale(currentResult(c).answer, currentRound(c).r));
   }
   const choosing = game.mode === 'ab' && game.phase === 'pick';
   els.action.classList.toggle('is-invisible', choosing);
@@ -371,6 +480,7 @@ export async function mountAnalyst(root, mode, { onExit }) {
       score: screen.querySelector('.an-score'),
       feedback: screen.querySelector('.an-feedback'),
       explain: screen.querySelector('.an-explain'),
+      scale: screen.querySelector('.an-scale'),
       action: screen.querySelector('.an-action'),
     },
   };

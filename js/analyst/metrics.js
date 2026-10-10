@@ -5,6 +5,11 @@ function f(n) {
   return n.toLocaleString('ru-RU', { maximumFractionDigits: 2 }).replace('-', '−');
 }
 
+// Доля в формуле разбора — без округления до сотых, иначе 2,5% превращается в 0,03.
+function share(percent) {
+  return (percent / 100).toLocaleString('ru-RU', { maximumFractionDigits: 4 });
+}
+
 // Каждая задача: вопрос, точный ответ, единица и разбор на тех же числах.
 const TEMPLATES = [
   function ctr(rng) {
@@ -48,7 +53,7 @@ const TEMPLATES = [
       question: `Выручка упала на ${down}%, а затем выросла на ${up}%. Как она изменилась за весь период?`,
       answer,
       unit: '%',
-      explain: `${f(1 - down / 100)} × ${f(1 + up / 100)} − 1 = ${f(answer)}%. Рост считается от уже уменьшенной базы.`,
+      explain: `${share(100 - down)} × ${share(100 + up)} − 1 = ${f(answer)}%. Рост считается от уже уменьшенной базы.`,
     };
   },
   function romi(rng) {
@@ -82,7 +87,7 @@ const TEMPLATES = [
       question: `${f(visits)} визитов, ${cart}% добавляют товар в корзину, ${buy}% из них оформляют заказ. Сколько заказов?`,
       answer,
       unit: 'заказов',
-      explain: `${f(visits)} × ${f(cart / 100)} × ${f(buy / 100)} = ${f(answer)}`,
+      explain: `${f(visits)} × ${share(cart)} × ${share(buy)} = ${f(answer)}`,
     };
   },
   function funnelBack(rng) {
@@ -93,7 +98,7 @@ const TEMPLATES = [
       question: `Нужно ${f(orders)} заказов, конверсия сайта ${f(cr)}%. Сколько нужно визитов?`,
       answer,
       unit: 'визитов',
-      explain: `Визиты = заказы / конверсия = ${f(orders)} / ${f(cr / 100)} = ${f(answer)}`,
+      explain: `Визиты = заказы / конверсия = ${f(orders)} / ${share(cr)} = ${f(answer)}`,
     };
   },
   function averageCheck(rng) {
@@ -115,7 +120,7 @@ const TEMPLATES = [
       question: `Аудитория растёт на ${growth}% в месяц. На сколько процентов она вырастет за ${months} месяца?`,
       answer,
       unit: '%',
-      explain: `(1 + ${f(growth / 100)})^${months} − 1 = ${f(answer)}%, а не ${growth * months}%: каждый месяц растёт уже увеличенная база.`,
+      explain: `(1 + ${share(growth)})^${months} − 1 = ${f(answer)}%, а не ${growth * months}%: каждый месяц растёт уже увеличенная база.`,
     };
   },
   function ltv(rng) {
@@ -127,19 +132,19 @@ const TEMPLATES = [
       question: `Средний чек ${f(check)} ₽, клиент делает ${purchases} ${purchases < 5 ? 'покупки' : 'покупок'}, маржа ${margin}%. Какой LTV по марже?`,
       answer,
       unit: '₽',
-      explain: `LTV = чек × покупки × маржа = ${f(check)} × ${purchases} × ${f(margin / 100)} = ${f(answer)} ₽`,
+      explain: `LTV = чек × покупки × маржа = ${f(check)} × ${purchases} × ${share(margin)} = ${f(answer)} ₽`,
     };
   },
   function survey(rng) {
     const total = pick(rng, [400, 800, 1000, 1200]);
-    const share = pick(rng, [25, 30, 40, 60]);
+    const menShare = pick(rng, [25, 30, 40, 60]);
     const chose = pick(rng, [10, 15, 20, 25, 50]);
-    const answer = (total * share * chose) / 10000;
+    const answer = (total * menShare * chose) / 10000;
     return {
-      question: `Из ${f(total)} респондентов ${share}% — мужчины, и ${chose}% из них выбрали вариант A. Сколько это человек?`,
+      question: `Из ${f(total)} респондентов ${menShare}% — мужчины, и ${chose}% из них выбрали вариант A. Сколько это человек?`,
       answer,
       unit: 'чел.',
-      explain: `${f(total)} × ${f(share / 100)} × ${f(chose / 100)} = ${f(answer)}`,
+      explain: `${f(total)} × ${share(menShare)} × ${share(chose)} = ${f(answer)}`,
     };
   },
 ];

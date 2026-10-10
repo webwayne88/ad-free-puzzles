@@ -120,3 +120,14 @@ test('ход партии: 10 раундов, ответ → разбор → с
   const corr = createGame('corr', seeded(5), DATA);
   assert.equal(corr.rounds.length, ROUNDS);
 });
+
+test('разбор воронки использует точную долю: 2,5% → 0,025, а не 0,03', () => {
+  for (let seed = 0; seed < 60; seed++) {
+    const round = createMetricsRounds(seeded(seed), 12).find((r) => r.kind === 'funnelBack');
+    const [orders, fraction] = round.explain
+      .match(/= ([\d\s ,]+) \/ ([\d,]+) =/)
+      .slice(1)
+      .map((s) => Number(s.replace(/\s/g, '').replace(',', '.')));
+    assert.ok(Math.abs(orders / fraction - round.answer) < 1e-6, round.explain);
+  }
+});
