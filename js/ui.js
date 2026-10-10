@@ -82,7 +82,9 @@ document.addEventListener('keydown', (event) => {
   const top = stack[stack.length - 1];
   if (!top) return;
   if (event.key === 'Escape' && top.dismissible) {
+    // Нажатие, закрывшее шторку, не должно дойти до игры (иначе тут же открывается пауза).
     event.preventDefault();
+    event.stopImmediatePropagation();
     closeEntry(top);
     return;
   }

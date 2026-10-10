@@ -10,6 +10,7 @@ const DEFAULTS = {
   highlightSame: true,
   autoNotes: true,
   showTimer: true,
+  ricochetInvertAim: false,
 };
 
 export function loadSettings() {

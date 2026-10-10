@@ -83,6 +83,12 @@ export function clampAim(dx, dy) {
   return { x, y };
 }
 
+// Смещение пальца на экране (moveX, moveY) → направление выстрела.
+// По умолчанию рогатка: тянешь вниз — шар летит вверх. При инверсии шар летит туда, куда ведёшь палец.
+export function dragToAim(moveX, moveY, inverted) {
+  return inverted ? clampAim(moveX, moveY) : clampAim(-moveX, -moveY);
+}
+
 function buildGrid(state) {
   const grid = [];
   for (let r = 0; r <= ROWS; r++) grid.push(new Array(COLS).fill(null));

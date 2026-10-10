@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { COLS, FLOOR, R, ROWS, clampAim, aimEnd, createGame, inDanger, launch, restore, snapshot, step } from '../js/ricochet/engine.js';
+import { COLS, FLOOR, R, ROWS, clampAim, aimEnd, createGame, dragToAim, inDanger, launch, restore, snapshot, step } from '../js/ricochet/engine.js';
 
 function seeded(seed) {
   let a = seed >>> 0;
@@ -146,4 +146,13 @@ test('попадание точно в стык двух блоков бьёт �
   assert.equal(hits.filter((e) => e.block.c === 3).length, 1);
   assert.equal(hits.filter((e) => e.block.c === 4).length, 1);
   assert.ok(Math.abs(state.launchX - 4) < 1e-6, `шар ушёл вбок: ${state.launchX}`);
+});
+
+test('прицел: рогатка по умолчанию, при инверсии — куда ведёшь палец', () => {
+  // Палец сместился вниз и влево: экранные dx = −30, dy = +80.
+  const slingshot = dragToAim(-30, 80, false);
+  assert.ok(slingshot.y < 0 && slingshot.x > 0, 'рогатка: вверх и вправо');
+  assert.equal(dragToAim(-30, 80, true), null, 'инверсия: вниз — отмена');
+  const follow = dragToAim(-30, -80, true);
+  assert.ok(follow.y < 0 && follow.x < 0, 'инверсия: вверх и влево, за пальцем');
 });

@@ -1,8 +1,8 @@
-import { COLS, FLOOR, GAP, HEIGHT, R, RING_R, aimEnd, clampAim, inDanger, launch, step } from './engine.js';
+import { COLS, FLOOR, GAP, HEIGHT, R, RING_R, aimEnd, clampAim, dragToAim, inDanger, launch, step } from './engine.js';
 import { clearGame, loadBest, newGame, saveBest, saveGame } from './session.js';
 import { icon } from '../icons.js';
-import { chooseTheme } from '../settings.js';
-import { el, isOverlayOpen, openOverlay, resultRow } from '../ui.js';
+import { chooseTheme, loadSettings, saveSettings } from '../settings.js';
+import { el, isOverlayOpen, openOverlay, resultRow, switchList } from '../ui.js';
 
 const BLOCK_TEXT = '#141826';
 // Шар из кольца — другого цвета, пока не присоединится к остальным.
@@ -24,6 +24,7 @@ const SCREEN_HTML = `
     <button type="button" class="pill pill-icon" data-act="back" aria-label="Назад">${icon('back')}</button>
     <div class="pill pill-group">
       <button type="button" class="pill-icon" data-act="theme" aria-label="Оформление">${icon('palette')}</button>
+      <button type="button" class="pill-icon" data-act="settings" aria-label="Настройки">${icon('settings')}</button>
       <button type="button" class="pill-icon" data-act="pause" aria-label="Пауза">${icon('pause')}</button>
     </div>
   </header>
@@ -38,7 +39,7 @@ const SCREEN_HTML = `
     </section>
     <div class="bz-bottom">
       <button type="button" class="btn bz-boost" data-act="boost" hidden>${icon('forward', 'icon icon-sm')}<span>Ускорить ×4</span></button>
-      <p class="bz-hint" hidden>Потяни вниз и отпусти</p>
+      <p class="bz-hint" hidden></p>
     </div>
   </main>`;
 
@@ -266,9 +267,9 @@ function onPointerDown(event) {
 function onPointerMove(event) {
   const c = ctx;
   if (!c || !c.drag || event.pointerId !== c.drag.id) return;
-  const dx = c.drag.x0 - event.clientX;
-  const dy = c.drag.y0 - event.clientY;
-  c.aim = Math.hypot(dx, dy) > DRAG_THRESHOLD_PX ? clampAim(dx, dy) : null;
+  const moveX = event.clientX - c.drag.x0;
+  const moveY = event.clientY - c.drag.y0;
+  c.aim = Math.hypot(moveX, moveY) > DRAG_THRESHOLD_PX ? dragToAim(moveX, moveY, c.invertAim) : null;
 }
 
 function onPointerUp(event) {
@@ -327,6 +328,30 @@ function openPause(c) {
     ],
     onClose: () => resumeAfterOverlay(c),
   });
+}
+
+function hintText(c) {
+  return c.invertAim ? 'Веди пальцем туда, куда стрелять, и отпусти' : 'Потяни вниз и отпусти';
+}
+
+function openSettings(c) {
+  c.paused = true;
+  c.drag = null;
+  c.aim = null;
+  const list = switchList([
+    {
+      label: 'Инверсия прицела: шар летит туда, куда ведёшь палец',
+      checked: c.invertAim,
+      onChange: (value) => {
+        c.invertAim = value;
+        const settings = loadSettings();
+        settings.ricochetInvertAim = value;
+        saveSettings(settings);
+        c.els.hint.textContent = hintText(c);
+      },
+    },
+  ]);
+  openOverlay({ title: 'Настройки', body: list, onClose: () => resumeAfterOverlay(c) });
 }
 
 function openTheme(c) {
@@ -404,9 +429,12 @@ export function mountRicochet(root, state, { onExit }) {
   };
   const c = ctx;
   c.g = c.els.canvas.getContext('2d');
+  c.invertAim = loadSettings().ricochetInvertAim;
+  c.els.hint.textContent = hintText(c);
   c.els.hint.hidden = state.level > 1;
   screen.querySelector('[data-act="back"]').addEventListener('click', () => c.onExit());
   screen.querySelector('[data-act="theme"]').addEventListener('click', () => openTheme(c));
+  screen.querySelector('[data-act="settings"]').addEventListener('click', () => openSettings(c));
   screen.querySelector('[data-act="pause"]').addEventListener('click', () => openPause(c));
   c.els.boost.addEventListener('click', () => {
     c.boosted = true;
