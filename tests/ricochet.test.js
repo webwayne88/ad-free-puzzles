@@ -137,3 +137,13 @@ test('опасность — блок на последнем ряду пере�
   assert.equal(inDanger(emptyGame({ blocks: [{ c: 0, r: ROWS - 2, hp: 1 }] })), false);
   assert.equal(inDanger(emptyGame({ blocks: [{ c: 0, r: ROWS - 1, hp: 1 }] })), true);
 });
+
+test('попадание точно в стык двух блоков бьёт оба и отражает шар как от ровной стены', () => {
+  const state = emptyGame({ launchX: 4, blocks: [{ c: 3, r: 2, hp: 3 }, { c: 4, r: 2, hp: 3 }] });
+  launch(state, clampAim(0, -1));
+  const events = playTurn(state, seeded(12));
+  const hits = events.filter((e) => e.type === 'hit');
+  assert.equal(hits.filter((e) => e.block.c === 3).length, 1);
+  assert.equal(hits.filter((e) => e.block.c === 4).length, 1);
+  assert.ok(Math.abs(state.launchX - 4) < 1e-6, `шар ушёл вбок: ${state.launchX}`);
+});

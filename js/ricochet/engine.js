@@ -134,28 +134,44 @@ function hitBlock(state, grid, block, events) {
   events.push({ type: 'break', block });
 }
 
+// Сначала собираем все касания за шаг: при попадании в стык урон получают оба блока,
+// а шар отражается один раз от суммарной нормали — как от ровной стены.
 function collideBlocks(state, grid, ball, events) {
+  const contacts = [];
   for (let r = Math.floor(ball.y - R); r <= Math.floor(ball.y + R); r++) {
     for (let c = Math.floor(ball.x - R); c <= Math.floor(ball.x + R); c++) {
       const block = grid[r] && grid[r][c];
       if (!block) continue;
       const px = Math.min(Math.max(ball.x, c + GAP), c + 1 - GAP);
       const py = Math.min(Math.max(ball.y, r + GAP), r + 1 - GAP);
-      const dx = ball.x - px;
-      const dy = ball.y - py;
-      const distance = Math.hypot(dx, dy);
+      const distance = Math.hypot(ball.x - px, ball.y - py);
       if (distance >= R || distance === 0) continue;
-      const nx = dx / distance;
-      const ny = dy / distance;
-      const dot = ball.vx * nx + ball.vy * ny;
-      ball.x = px + nx * R;
-      ball.y = py + ny * R;
-      if (dot >= 0) continue;
-      ball.vx -= 2 * dot * nx;
-      ball.vy -= 2 * dot * ny;
-      hitBlock(state, grid, block, events);
+      contacts.push({ block, nx: (ball.x - px) / distance, ny: (ball.y - py) / distance, depth: R - distance });
     }
   }
+  if (!contacts.length) return;
+  let sx = 0;
+  let sy = 0;
+  const hit = [];
+  for (const contact of contacts) {
+    ball.x += contact.nx * contact.depth;
+    ball.y += contact.ny * contact.depth;
+    if (ball.vx * contact.nx + ball.vy * contact.ny >= 0) continue;
+    sx += contact.nx;
+    sy += contact.ny;
+    hit.push(contact.block);
+  }
+  const length = Math.hypot(sx, sy);
+  if (length > 1e-9) {
+    const nx = sx / length;
+    const ny = sy / length;
+    const dot = ball.vx * nx + ball.vy * ny;
+    if (dot < 0) {
+      ball.vx -= 2 * dot * nx;
+      ball.vy -= 2 * dot * ny;
+    }
+  }
+  for (const block of hit) hitBlock(state, grid, block, events);
 }
 
 function collectRings(state, ball, events) {
