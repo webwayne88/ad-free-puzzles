@@ -1,5 +1,7 @@
 # Игротека
 
+[![CI](https://github.com/webwayne88/ad-free-puzzles/actions/workflows/ci.yml/badge.svg)](https://github.com/webwayne88/ad-free-puzzles/actions/workflows/ci.yml)
+
 Головоломки без рекламы. PWA: ставится на Android с главного экрана и работает офлайн. Внутри судоку и Ballz.
 
 ## Судоку
@@ -34,7 +36,13 @@ docker compose up -d --build web
 
 Открыть: http://localhost:8080 (порт задаётся в `.env`, переменная `WEB_PORT`).
 
-С телефона в той же сети: `http://<IP мака>:8080`. Офлайн-режим и установка на главный экран требуют HTTPS, поэтому для установки приложение нужно выложить, например, на GitHub Pages.
+С телефона в той же сети: `http://<IP мака>:8080`. Офлайн-режим и установка на главный экран требуют HTTPS — для этого есть версия на GitHub Pages (ниже).
+
+## Деплой
+
+Сайт: https://webwayne88.github.io/ad-free-puzzles/
+
+`.github/workflows/ci.yml` на каждый пуш в `main`/`dev` и на PR гоняет тесты. Из `main` при зелёных тестах выкладывает на GitHub Pages только файлы приложения и меняет имя офлайн-кеша на хеш коммита — телефоны сразу получают новую версию.
 
 ## Тесты и генерация банка
 
