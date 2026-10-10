@@ -1,4 +1,5 @@
 import { loadBest as loadBallzBest, loadGame as loadBallzGame, newGame as newBallzGame } from './ballz/session.js';
+import { formatScore, loadStats as loadHuesStats } from './hues/session.js';
 import { icon } from './icons.js';
 import { chooseTheme } from './settings.js';
 import { difficultyLabel, formatTime, loadGame, newGame } from './sudoku/session.js';
@@ -78,10 +79,27 @@ function ballzCard(onOpen) {
   });
 }
 
+function huesCard(onOpen) {
+  const stats = loadHuesStats();
+  const bests = ['memory', 'palette'].map((mode) => stats[mode]?.best ?? null);
+  const desc = bests.some((best) => best !== null)
+    ? `Рекорды: цвет ${bests[0] === null ? '—' : formatScore(bests[0])}, палитра ${bests[1] === null ? '—' : formatScore(bests[1])}`
+    : 'Запомни цвет или допиши гармоничную палитру';
+  return gameCard({
+    logo: 'icons/hues.svg',
+    name: 'Оттенки',
+    desc,
+    actions: [
+      button('Допиши палитру', false, () => onOpen('hues/palette')),
+      button('Запомни цвет', true, () => onOpen('hues/memory')),
+    ],
+  });
+}
+
 export function renderHome(root, { onOpen }) {
   const screen = el('div', 'screen home');
   screen.innerHTML = HOME_HTML;
   screen.querySelector('[data-act="theme"]').addEventListener('click', () => chooseTheme());
-  screen.querySelector('.game-list').append(sudokuCard(onOpen), ballzCard(onOpen));
+  screen.querySelector('.game-list').append(sudokuCard(onOpen), ballzCard(onOpen), huesCard(onOpen));
   root.append(screen);
 }

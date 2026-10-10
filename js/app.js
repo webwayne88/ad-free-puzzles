@@ -1,6 +1,7 @@
 import { loadGame as loadBallzGame, newGame as newBallzGame } from './ballz/session.js';
 import { mountBallz, unmountBallz } from './ballz/view.js';
 import { renderHome } from './home.js';
+import { mountHues, unmountHues } from './hues/view.js';
 import { applyTheme, loadSettings } from './settings.js';
 import { loadGame } from './sudoku/session.js';
 import { mountSudoku, unmountSudoku } from './sudoku/view.js';
@@ -27,8 +28,13 @@ function exitToHome() {
 function route() {
   unmountSudoku();
   unmountBallz();
+  unmountHues();
   closeAllOverlays();
   root.replaceChildren();
+  if (location.hash === '#/hues/memory' || location.hash === '#/hues/palette') {
+    mountHues(root, location.hash.slice('#/hues/'.length), { onExit: exitToHome });
+    return;
+  }
   if (location.hash === '#/ballz') {
     mountBallz(root, loadBallzGame() ?? newBallzGame(), { onExit: exitToHome });
     return;
